@@ -1,0 +1,77 @@
+.letsjam-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: system-ui, sans-serif;
+  user-select: none;
+}
+
+.letsjam-canvas-wrap {
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  line-height: 0;  /* remove inline-block gap under canvas */
+}
+
+.letsjam-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 2px;
+}
+
+.letsjam-btn {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-width: 60px;
+}
+.letsjam-btn:hover  { background: #2563eb; }
+.letsjam-btn:active { background: #1d4ed8; }
+
+.letsjam-speed-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+}
+
+.letsjam-speed {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 130px;
+  height: 4px;
+  border-radius: 2px;
+  background: #cbd5e1;
+  outline: none;
+  cursor: pointer;
+}
+.letsjam-speed::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+.letsjam-speed::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: none;
+}
+
+.letsjam-frame-label {
+  font-size: 12px;
+  color: #888;
+  margin-left: auto;
+}

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "letsjam"
+version = "0.1.0"
+description = "Traffic simulation visualiser for Jupyter notebooks"
+requires-python = ">=3.10"
+dependencies = [
+    "anywidget>=0.9",
+    "numpy>=1.24",
+    "traitlets>=5.0",
+]
+
+[project.optional-dependencies]
+dev = ["jupyterlab", "notebook"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["letsjam"]
