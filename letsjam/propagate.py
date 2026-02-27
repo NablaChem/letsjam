@@ -149,7 +149,7 @@ def run_simulation(
                 else:
                     dist_to_next = math.inf
 
-                dist_to_light = max(0.0, stop_line - c.dist)
+                dist_to_light = math.inf if green_here else max(0.0, stop_line - c.dist)
 
                 delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
                 c.velocity = max(0.0, min(10.0, c.velocity + delta))
