@@ -88,9 +88,9 @@ class Highway(ChallengeMap):
 
         for y in lane_ys:
             n_src = len(nodes)
-            nodes.append((0.0, y))
+            nodes.append((-10.0, y))
             n_sink = len(nodes)
-            nodes.append((w, y))
+            nodes.append((w + 10, y))
             streets.append((n_src, n_sink))
 
         return Map(nodes=nodes, streets=streets, width=w)
