@@ -135,4 +135,36 @@ class MainStreet(ChallengeMap):
         return Map(nodes=nodes, streets=streets, width=w)
 
 
-__all__ = ["ChallengeMap", "Highway"]
+class SmallTown(ChallengeMap):
+    WIDTH = 220.0
+
+    @classmethod
+    def build(cls) -> Map:
+        w = cls.WIDTH
+        h = cls.height()  # 180.0
+
+        nodes: list[tuple[float, float]] = []
+        streets: list[tuple[int, int]] = []
+
+        n_src = len(nodes)
+        nodes.append((-10.0, 0.2 * h))
+        n_top_left = len(nodes)
+        nodes.append((w * 0.3, 0.2 * h))
+        n_top_right = len(nodes)
+        nodes.append((w * 0.7, 0.2 * h))
+        n_bottom_left = len(nodes)
+        nodes.append((w * 0.3, -0.2 * h))
+        n_bottom_right = len(nodes)
+        nodes.append((w * 0.7, -0.2 * h))
+        n_sink = len(nodes)
+        nodes.append((w + 10, -0.2 * h))
+        streets.append((n_src, n_top_left))
+        streets.append((n_top_left, n_top_right))
+        streets.append((n_top_left, n_bottom_left))
+        streets.append((n_top_right, n_bottom_right))
+        streets.append((n_bottom_left, n_bottom_right))
+        streets.append((n_bottom_right, n_sink))
+        return Map(nodes=nodes, streets=streets, width=w)
+
+
+__all__ = ["ChallengeMap", "Highway", "MainStreet", "SmallTown"]

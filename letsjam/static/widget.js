@@ -82,7 +82,7 @@ const COLORS = {
 };
 
 const STREET_WIDTH = 6;
-const CROSSING_R = 10;
+const CROSSING_R = 5;
 const CAR_WIDTH = 3;
 
 // ---------------------------------------------------------------------------
