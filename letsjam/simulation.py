@@ -54,6 +54,7 @@ class Trajectory:
     def __init__(self, map_: Map) -> None:
         self._map = map_
         self._frames: list[np.ndarray] = []   # each entry: 1D array of _CELL_DTYPE, shape (n_cars,)
+        self._light_frames: list[list[int]] = []  # per frame: light_green index per node
 
     # ------------------------------------------------------------------
     # building
@@ -89,6 +90,30 @@ class Trajectory:
             frame[i]["edge_id"] = eid
             frame[i]["dist"]    = dist
         self._frames.append(frame)
+
+    def append_lights(self, light_green: list[int]) -> None:
+        """Record per-node traffic light state for the current frame.
+
+        Parameters
+        ----------
+        light_green:
+            One int per node: the inbound-street index that is green, or -1
+            if all lights at that node are red.
+        """
+        self._light_frames.append(list(light_green))
+
+    def lights_to_bytes(self) -> bytes:
+        """Serialise light state to binary.
+
+        Format: 8-byte header (int32 n_frames, int32 n_nodes) followed by
+        n_frames × n_nodes int8 values (row-major).  Returns b"" if no light
+        frames have been recorded.
+        """
+        if not self._light_frames:
+            return b""
+        arr = np.array(self._light_frames, dtype=np.int8)
+        n_frames, n_nodes = arr.shape
+        return struct.pack("<ii", n_frames, n_nodes) + arr.tobytes()
 
     def append_dict(self, states: dict[int, tuple[int, float]]) -> None:
         """

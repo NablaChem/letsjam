@@ -78,6 +78,7 @@ class TrafficWidget(anywidget.AnyWidget):
 
     map_data   = traitlets.Dict({}).tag(sync=True)
     trajectory = traitlets.Bytes(b"").tag(sync=True)
+    lights     = traitlets.Bytes(b"").tag(sync=True)
     n_frames   = traitlets.Int(0).tag(sync=True)
     n_cars     = traitlets.Int(0).tag(sync=True)
 
@@ -107,6 +108,7 @@ class TrafficWidget(anywidget.AnyWidget):
         return cls(
             map_data   = map_.to_dict(),
             trajectory = traj.to_bytes(),
+            lights     = traj.lights_to_bytes(),
             n_frames   = traj.n_frames,
             n_cars     = traj.n_cars,
         )
@@ -120,6 +122,7 @@ class TrafficWidget(anywidget.AnyWidget):
         self.n_frames   = traj.n_frames
         self.n_cars     = traj.n_cars
         self.trajectory = traj.to_bytes()
+        self.lights     = traj.lights_to_bytes()
 
     def update_map(self, map_: Map) -> None:
         """Replace the map (rebuilds the full scene in JS)."""
@@ -131,4 +134,5 @@ class TrafficWidget(anywidget.AnyWidget):
         self.n_frames   = traj.n_frames
         self.n_cars     = traj.n_cars
         self.trajectory = traj.to_bytes()
+        self.lights     = traj.lights_to_bytes()
         self.map_data   = map_.to_dict()

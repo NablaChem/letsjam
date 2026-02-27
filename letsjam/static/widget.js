@@ -84,6 +84,70 @@ const COLORS = {
 const STREET_WIDTH = 6;
 const CROSSING_R = 5;
 const CAR_WIDTH = 3;
+const STOP_DISTANCE = 8;   // must match propagate.py stop_distance
+const STOP_LINE_COLOR_RED   = 0xef4444;
+const STOP_LINE_COLOR_GREEN = 0x4ade80;
+
+// ---------------------------------------------------------------------------
+// Traffic-light helpers
+// ---------------------------------------------------------------------------
+
+/** Parse the binary lights blob produced by Trajectory.lights_to_bytes(). */
+function parseLights(buffer) {
+  if (!buffer || buffer.byteLength < 8) return null;
+  const buf = buffer instanceof ArrayBuffer ? buffer : buffer.buffer;
+  const view = new DataView(buf);
+  const n_frames = view.getInt32(0, true);
+  const n_nodes  = view.getInt32(4, true);
+  const data = new Int8Array(buf, 8, n_frames * n_nodes);
+  return { data, n_frames, n_nodes };
+}
+
+/** Build inbound[node] = [street_id, ...] in the same order as Python's _build_graph. */
+function buildInbound(nodes, streets) {
+  const inbound = nodes.map(() => []);
+  for (let s = 0; s < streets.length; s++) {
+    inbound[streets[s][1]].push(s);
+  }
+  return inbound;
+}
+
+/** Redraw all stop lines for the given (possibly fractional) frame. */
+function updateStopLines(g, mapData, inbound, lightsData, fracFrame) {
+  g.clear();
+  if (!lightsData) return;
+  const { nodes, streets } = mapData;
+  const { data, n_nodes } = lightsData;
+  const frame = Math.min(Math.floor(fracFrame), lightsData.n_frames - 1);
+
+  for (let s = 0; s < streets.length; s++) {
+    const ti = streets[s][1];
+    if (inbound[ti].length === 0) continue;   // source node — no light
+
+    const [fi] = streets[s];
+    const [fx, fy] = nodes[fi];
+    const [tx, ty] = nodes[ti];
+    const len = Math.hypot(tx - fx, ty - fy);
+    if (len <= STOP_DISTANCE) continue;
+
+    const t  = (len - STOP_DISTANCE) / len;
+    const mx = fx + (tx - fx) * t;
+    const my = fy + (ty - fy) * t;
+
+    // perpendicular to street direction
+    const px = -(ty - fy) / len;
+    const py =  (tx - fx) / len;
+    const hw = STREET_WIDTH / 2 + 1;
+
+    const greenIdx   = data[frame * n_nodes + ti];
+    const inboundIdx = inbound[ti].indexOf(s);
+    const color = (greenIdx === inboundIdx) ? STOP_LINE_COLOR_GREEN : STOP_LINE_COLOR_RED;
+
+    g.lineStyle(1.5, color, 0.9);
+    g.moveTo(mx - px * hw, my - py * hw);
+    g.lineTo(mx + px * hw, my + py * hw);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Scene builder
@@ -280,6 +344,9 @@ export async function render({ model, el }) {
   // --- state ---------------------------------------------------------------
   let traj = null;
   let sprites = [];
+  let stopLineGfx = null;
+  let lightsData = null;
+  let inbound = [];
   let playing = false;
   let fracFrame = 0;
   let lastTs = null;
@@ -301,7 +368,9 @@ export async function render({ model, el }) {
       }
     }
     lastTs = ts;
-    renderFrame(traj, model.get("map_data"), sprites, fracFrame);
+    const mapData = model.get("map_data");
+    updateStopLines(stopLineGfx, mapData, inbound, lightsData, fracFrame);
+    renderFrame(traj, mapData, sprites, fracFrame);
     frameLabel.textContent = `frame ${Math.min(Math.floor(fracFrame) + 1, traj.n_frames)} / ${traj.n_frames}`;
     app.renderer.render(app.stage);
   }
@@ -354,10 +423,18 @@ export async function render({ model, el }) {
       app.stage.addChild(world);
 
       buildStaticScene(world, mapData);
+
+      stopLineGfx = new PIXI.Graphics();
+      world.addChild(stopLineGfx);
+
       buildWorldOutline(world, mapData);
       sprites = buildCarSprites(world, mapData);
 
+      inbound = buildInbound(mapData.nodes, mapData.streets);
+      lightsData = parseLights(model.get("lights"));
+
       traj = parseTrajectory(rawTraj, model.get("n_frames") || 0, model.get("n_cars") || 0);
+      updateStopLines(stopLineGfx, mapData, inbound, lightsData, 0);
       renderFrame(traj, mapData, sprites, 0);
       frameLabel.textContent = `frame 1 / ${traj.n_frames}`;
       app.renderer.render(app.stage);
@@ -368,6 +445,7 @@ export async function render({ model, el }) {
 
   model.on("change:map_data", rebuildScene);
   model.on("change:trajectory", rebuildScene);
+  model.on("change:lights", rebuildScene);
   rebuildScene();
 
   return () => {

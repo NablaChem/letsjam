@@ -215,5 +215,6 @@ def run_simulation(
                 if c.edge_id != DISABLED
             }
         )
+        traj.append_lights(light_green)
 
     return traj
