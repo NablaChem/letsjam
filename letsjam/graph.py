@@ -50,6 +50,14 @@ class Map:
     car_types:    list[int]        = field(default_factory=list)  # 0=car 1=truck
     car_length:   float            = 4.0
     truck_length: float            = 8.0
+    # Viewport width in world units.  Height is always width * 9/16.
+    # When 0 the widget falls back to auto-fitting from node bounds.
+    width:        float            = 0.0
+
+    @property
+    def height(self) -> float:
+        """Viewport height inferred from width at a fixed 16:9 aspect ratio."""
+        return self.width * 9.0 / 16.0
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -126,4 +134,5 @@ class Map:
             "car_types":    list(self.car_types),
             "car_length":   self.car_length,
             "truck_length": self.truck_length,
+            "width":        self.width,
         }

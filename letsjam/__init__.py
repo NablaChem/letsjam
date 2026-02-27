@@ -25,12 +25,15 @@ Quick start
 """
 
 from .graph import Decoration, Map
+from .maps import ChallengeMap, Highway
 from .simulation import DISABLED, Trajectory, unpack_trajectory
 from .widget import TrafficWidget
 
 __all__ = [
     "Map",
     "Decoration",
+    "ChallengeMap",
+    "Highway",
     "Trajectory",
     "TrafficWidget",
     "DISABLED",

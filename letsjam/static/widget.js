@@ -21,20 +21,20 @@ function parseTrajectory(buffer, nFrames, nCars) {
   );
   // header is still present in the blob
   const storedFrames = view.getInt32(0, true);
-  const storedCars   = view.getInt32(4, true);
-  const frames       = storedFrames || nFrames;
-  const cars         = storedCars   || nCars;
+  const storedCars = view.getInt32(4, true);
+  const frames = storedFrames || nFrames;
+  const cars = storedCars || nCars;
 
   const edge_ids = new Int32Array(frames * cars);
-  const dists    = new Float32Array(frames * cars);
+  const dists = new Float32Array(frames * cars);
 
   let offset = 8;
   for (let f = 0; f < frames; f++) {
     for (let c = 0; c < cars; c++) {
-      const idx     = f * cars + c;
-      edge_ids[idx] = view.getInt32(offset,     true);
-      dists[idx]    = view.getFloat32(offset + 4, true);
-      offset       += 8;
+      const idx = f * cars + c;
+      edge_ids[idx] = view.getInt32(offset, true);
+      dists[idx] = view.getFloat32(offset + 4, true);
+      offset += 8;
     }
   }
   return { edge_ids, dists, n_frames: frames, n_cars: cars };
@@ -48,10 +48,10 @@ function edgeWorldPos(nodes, streets, edgeId, dist) {
   const [fx, fy] = nodes[fi];
   const [tx, ty] = nodes[ti];
   const len = Math.hypot(tx - fx, ty - fy);
-  const t   = len > 0 ? dist / len : 0;
+  const t = len > 0 ? dist / len : 0;
   return {
-    x:     fx + (tx - fx) * t,
-    y:     fy + (ty - fy) * t,
+    x: fx + (tx - fx) * t,
+    y: fy + (ty - fy) * t,
     angle: Math.atan2(ty - fy, tx - fx),
   };
 }
@@ -60,7 +60,7 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 
 function lerpAngle(a, b, t) {
   let diff = b - a;
-  while (diff >  Math.PI) diff -= 2 * Math.PI;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
   while (diff < -Math.PI) diff += 2 * Math.PI;
   return a + diff * t;
 }
@@ -69,29 +69,29 @@ function lerpAngle(a, b, t) {
 // Colour palette
 // ---------------------------------------------------------------------------
 const COLORS = {
-  background:  0x1a1a2e,
-  street:      0x374151,
-  streetLine:  0x4b5563,
-  crossing:    0x4b5563,
+  background: 0x1a1a2e,
+  street: 0x374151,
+  streetLine: 0x4b5563,
+  crossing: 0x4b5563,
   crossingRim: 0x6b7280,
-  car:         0x60a5fa,
-  truck:       0xfbbf24,
-  parkFill:    0x15803d,
-  parkBorder:  0x166534,
-  riverFill:   0x3b82f6,
+  car: 0x60a5fa,
+  truck: 0xfbbf24,
+  parkFill: 0x15803d,
+  parkBorder: 0x166534,
+  riverFill: 0x3b82f6,
 };
 
 const STREET_WIDTH = 6;
-const CROSSING_R   = 10;
-const CAR_WIDTH    = 3;
+const CROSSING_R = 10;
+const CAR_WIDTH = 3;
 
 // ---------------------------------------------------------------------------
 // Scene builder
 // ---------------------------------------------------------------------------
-function buildStaticScene(app, mapData) {
+function buildStaticScene(parent, mapData) {
   const { nodes, streets, decorations } = mapData;
   const g = new PIXI.Graphics();
-  app.stage.addChild(g);
+  parent.addChild(g);
 
   for (const dec of (decorations || [])) {
     const pts = dec.points;
@@ -132,18 +132,31 @@ function buildStaticScene(app, mapData) {
 }
 
 // ---------------------------------------------------------------------------
+// World outline
+// ---------------------------------------------------------------------------
+function buildWorldOutline(parent, mapData) {
+  const mapW = mapData.width;
+  const mapH = mapW * 9 / 16;
+  const g = new PIXI.Graphics();
+  g.lineStyle(10, 0xffdd00, 1);
+  g.drawRect(0, -mapH / 2, mapW, mapH);
+  parent.addChild(g);
+  return g;
+}
+
+// ---------------------------------------------------------------------------
 // Car sprites
 // ---------------------------------------------------------------------------
-function buildCarSprites(app, mapData) {
+function buildCarSprites(parent, mapData) {
   const { car_types, car_length, truck_length } = mapData;
   const container = new PIXI.Container();
-  app.stage.addChild(container);
+  parent.addChild(container);
   const sprites = [];
 
   for (let i = 0; i < car_types.length; i++) {
     const isTruck = car_types[i] === 1;
-    const length  = isTruck ? truck_length : car_length;
-    const color   = isTruck ? COLORS.truck : COLORS.car;
+    const length = isTruck ? truck_length : car_length;
+    const color = isTruck ? COLORS.truck : COLORS.car;
     const g = new PIXI.Graphics();
     g.beginFill(color, 1);
     g.drawRoundedRect(-length / 2, -CAR_WIDTH / 2, length, CAR_WIDTH, 1);
@@ -165,10 +178,10 @@ function renderFrame(traj, mapData, sprites, fracFrame) {
   const { edge_ids, dists, n_frames, n_cars } = traj;
   const f0 = Math.floor(fracFrame);
   const f1 = Math.min(f0 + 1, n_frames - 1);
-  const t  = fracFrame - f0;
+  const t = fracFrame - f0;
 
   for (let c = 0; c < n_cars; c++) {
-    const g    = sprites[c];
+    const g = sprites[c];
     const eid0 = edge_ids[f0 * n_cars + c];
     const eid1 = edge_ids[f1 * n_cars + c];
 
@@ -180,7 +193,7 @@ function renderFrame(traj, mapData, sprites, fracFrame) {
     let x, y, angle;
 
     if (eid0 === eid1 || eid1 === -1) {
-      const d   = eid1 === -1 ? d0 : lerp(d0, d1, t);
+      const d = eid1 === -1 ? d0 : lerp(d0, d1, t);
       const pos = edgeWorldPos(nodes, streets, eid0, d);
       x = pos.x; y = pos.y; angle = pos.angle;
     } else {
@@ -192,26 +205,6 @@ function renderFrame(traj, mapData, sprites, fracFrame) {
     }
     g.x = x; g.y = y; g.rotation = angle;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Stage fit
-// ---------------------------------------------------------------------------
-function fitStage(app, nodes, padding = 30) {
-  if (!nodes || nodes.length === 0) return;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [x, y] of nodes) {
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-  }
-  const mapW = maxX - minX || 1;
-  const mapH = maxY - minY || 1;
-  const cw   = app.renderer.width;
-  const ch   = app.renderer.height;
-  const scale = Math.min((cw - 2 * padding) / mapW, (ch - 2 * padding) / mapH);
-  app.stage.scale.set(scale);
-  app.stage.x = padding - minX * scale + ((cw - 2 * padding) - mapW * scale) / 2;
-  app.stage.y = padding - minY * scale + ((ch - 2 * padding) - mapH * scale) / 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,15 +258,18 @@ export async function render({ model, el }) {
   controls.appendChild(frameLabel);
 
   // --- PixiJS app ----------------------------------------------------------
+  const CANVAS_W = 960;
+  const CANVAS_H = Math.round(CANVAS_W * 9 / 16); // 540 — fixed 16:9
+
   let app;
   try {
     app = new PIXI.Application({
-      width:           700,
-      height:          500,
+      width: CANVAS_W,
+      height: CANVAS_H,
       backgroundColor: COLORS.background,
-      antialias:       true,
-      resolution:      window.devicePixelRatio || 1,
-      autoDensity:     true,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
     });
   } catch (e) {
     showError("PIXI.Application init failed:\n" + e);
@@ -282,12 +278,12 @@ export async function render({ model, el }) {
   canvasWrap.appendChild(app.view);
 
   // --- state ---------------------------------------------------------------
-  let traj      = null;
-  let sprites   = [];
-  let playing   = false;
+  let traj = null;
+  let sprites = [];
+  let playing = false;
   let fracFrame = 0;
-  let lastTs    = null;
-  let rafId     = null;
+  let lastTs = null;
+  let rafId = null;
   const speedSlider = speedWrap.querySelector(".letsjam-speed");
 
   // --- playback loop -------------------------------------------------------
@@ -295,12 +291,12 @@ export async function render({ model, el }) {
     rafId = requestAnimationFrame(loop);
     if (!traj || !playing) { lastTs = null; return; }
     if (lastTs !== null) {
-      const dt  = (ts - lastTs) / 1000;
+      const dt = (ts - lastTs) / 1000;
       const fps = parseFloat(speedSlider.value);
       fracFrame += dt * fps;
       if (fracFrame >= traj.n_frames - 1) {
         fracFrame = traj.n_frames - 1;
-        playing   = false;
+        playing = false;
         playBtn.textContent = "Replay";
       }
     }
@@ -339,16 +335,29 @@ export async function render({ model, el }) {
       if (!mapData || !rawTraj || rawTraj.byteLength === 0) return;
 
       app.stage.removeChildren();
-      sprites   = [];
-      playing   = false;
+      sprites = [];
+      playing = false;
       fracFrame = 0;
       playBtn.textContent = "Play";
 
-      buildStaticScene(app, mapData);
-      sprites = buildCarSprites(app, mapData);
+      // Resize renderer to map coordinate space; CSS keeps visual size fixed.
+      // x ∈ [0, mapW], y ∈ [-mapH/2, +mapH/2] with scale = 1 everywhere.
+      const mapW = mapData.width;
+      const mapH = mapW * 9 / 16;
+      app.renderer.resize(mapW, mapH);
+      app.view.style.width  = CANVAS_W + 'px';
+      app.view.style.height = CANVAS_H + 'px';
+
+      const world = new PIXI.Container();
+      world.x = 0;
+      world.y = mapH / 2;   // world y=0 at canvas vertical centre
+      app.stage.addChild(world);
+
+      buildStaticScene(world, mapData);
+      buildWorldOutline(world, mapData);
+      sprites = buildCarSprites(world, mapData);
 
       traj = parseTrajectory(rawTraj, model.get("n_frames") || 0, model.get("n_cars") || 0);
-      fitStage(app, mapData.nodes);
       renderFrame(traj, mapData, sprites, 0);
       frameLabel.textContent = `frame 1 / ${traj.n_frames}`;
       app.renderer.render(app.stage);
@@ -357,7 +366,7 @@ export async function render({ model, el }) {
     }
   }
 
-  model.on("change:map_data",   rebuildScene);
+  model.on("change:map_data", rebuildScene);
   model.on("change:trajectory", rebuildScene);
   rebuildScene();
 
