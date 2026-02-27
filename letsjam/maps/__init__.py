@@ -96,4 +96,43 @@ class Highway(ChallengeMap):
         return Map(nodes=nodes, streets=streets, width=w)
 
 
+class MainStreet(ChallengeMap):
+    """A single lane with a traffic light in the middle.
+
+    Viewport: WIDTH=320, height=180 (16:9).
+    Origin at left-centre (x=0, y=0).
+
+    Street layout:
+        source (x=0, y=0) ──► traffic light (x=WIDTH/2, y=0) ──► sink (x=WIDTH, y=0)
+
+    Street indices: lane 0 → 0 (y=0)
+    """
+
+    name = "main_street"
+    description = (
+        "A single lane with a traffic light in the middle. "
+        "Keep traffic flowing without rear-end collisions."
+    )
+    WIDTH = 320.0
+
+    @classmethod
+    def build(cls) -> Map:
+        w = cls.WIDTH
+        h = cls.height()  # 180.0
+
+        nodes: list[tuple[float, float]] = []
+        streets: list[tuple[int, int]] = []
+
+        n_src = len(nodes)
+        nodes.append((-10.0, 0.0))
+        n_light = len(nodes)
+        nodes.append((w * 0.6, 0.2 * h))
+        n_sink = len(nodes)
+        nodes.append((w + 10, 0.0))
+        streets.append((n_src, n_light))
+        streets.append((n_light, n_sink))
+
+        return Map(nodes=nodes, streets=streets, width=w)
+
+
 __all__ = ["ChallengeMap", "Highway"]
