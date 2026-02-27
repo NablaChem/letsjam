@@ -138,7 +138,7 @@ function buildWorldOutline(parent, mapData) {
   const mapW = mapData.width;
   const mapH = mapW * 9 / 16;
   const g = new PIXI.Graphics();
-  g.lineStyle(2, 0xffdd00, 1);
+  //g.lineStyle(2, 0xffdd00, 1);
   g.drawRect(0, -mapH / 2, mapW, mapH);
   parent.addChild(g);
   return g;

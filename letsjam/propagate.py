@@ -127,12 +127,16 @@ def run_simulation(
             for rank, car_idx in enumerate(car_indices):
                 c = cars[car_idx]
 
+                bumper = math.inf
                 if rank > 0:
-                    ahead_idx  = car_indices[rank - 1]
-                    ahead      = cars[ahead_idx]
-                    ahead_len  = map_.car_visual_length(ahead_idx)
-                    bumper     = ahead.dist - ahead_len
-                    dist_to_next = bumper - c.dist
+                    ahead_idx = car_indices[rank - 1]
+                    ahead     = cars[ahead_idx]
+                    if ahead.edge_id == street_id:  # still on same street
+                        ahead_len    = map_.car_visual_length(ahead_idx)
+                        bumper       = ahead.dist - ahead_len
+                        dist_to_next = bumper - c.dist
+                    else:
+                        dist_to_next = math.inf
                 else:
                     dist_to_next = math.inf
 
@@ -144,10 +148,9 @@ def run_simulation(
                 new_dist   = c.dist + c.velocity
 
                 # rear-end prevention: keep gap >= length of car ahead
-                if rank > 0:
-                    if new_dist >= bumper:
-                        new_dist   = bumper
-                        c.velocity = ahead.velocity
+                if bumper < math.inf and new_dist >= bumper:
+                    new_dist   = bumper
+                    c.velocity = ahead.velocity
 
                 # handle end of edge
                 if new_dist >= stop_line and not green_here:  # stop at stop line
