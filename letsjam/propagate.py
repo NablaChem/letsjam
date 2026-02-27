@@ -105,7 +105,7 @@ def run_simulation(
             ]
 
             new_green = traffic_light(
-                inbound_data, outbound_data, light_last_switch[node]
+                inbound_data, outbound_data, light_last_switch[node], light_green[node]
             )
 
             if not (0 <= new_green < len(ins)):  # invalid: all red

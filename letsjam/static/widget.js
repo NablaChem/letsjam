@@ -134,18 +134,32 @@ function updateStopLines(g, mapData, inbound, lightsData, fracFrame) {
     const mx = fx + (tx - fx) * t;
     const my = fy + (ty - fy) * t;
 
-    // perpendicular to street direction
-    const px = -(ty - fy) / len;
-    const py =  (tx - fx) / len;
+    const dx = (tx - fx) / len;     // unit direction along street
+    const dy = (ty - fy) / len;
+    const px = -dy;                  // perpendicular (left of travel)
+    const py =  dx;
     const hw = STREET_WIDTH / 2 + 1;
 
     const greenIdx   = data[frame * n_nodes + ti];
     const inboundIdx = inbound[ti].indexOf(s);
-    const color = (greenIdx === inboundIdx) ? STOP_LINE_COLOR_GREEN : STOP_LINE_COLOR_RED;
+    const isGreen    = (greenIdx === inboundIdx);
 
-    g.lineStyle(1.5, color, 0.9);
-    g.moveTo(mx - px * hw, my - py * hw);
-    g.lineTo(mx + px * hw, my + py * hw);
+    if (isGreen) {
+      // filled triangle pointing toward the intersection
+      g.lineStyle(0);
+      g.beginFill(STOP_LINE_COLOR_GREEN, 0.9);
+      g.drawPolygon([
+        mx - px * hw, my - py * hw,   // base left
+        mx + px * hw, my + py * hw,   // base right
+        mx + dx * hw, my + dy * hw,   // tip (forward)
+      ]);
+      g.endFill();
+    } else {
+      // red line across the street
+      g.lineStyle(1.5, STOP_LINE_COLOR_RED, 0.9);
+      g.moveTo(mx - px * hw, my - py * hw);
+      g.lineTo(mx + px * hw, my + py * hw);
+    }
   }
 }
 
