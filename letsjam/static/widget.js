@@ -423,17 +423,17 @@ export async function render({ model, el }) {
       fracFrame = 0;
       playBtn.textContent = "Play";
 
-      // Resize renderer to map coordinate space; CSS keeps visual size fixed.
-      // x ∈ [0, mapW], y ∈ [-mapH/2, +mapH/2] with scale = 1 everywhere.
+      // Keep the renderer at the fixed display resolution so the framebuffer
+      // is never smaller than the canvas element.  Scale the world container
+      // so that map coordinates fill the display exactly.
       const mapW = mapData.width;
       const mapH = mapW * 9 / 16;
-      app.renderer.resize(mapW, mapH);
-      app.view.style.width = CANVAS_W + 'px';
-      app.view.style.height = CANVAS_H + 'px';
+      const scale = CANVAS_W / mapW;
 
       const world = new PIXI.Container();
+      world.scale.set(scale);
       world.x = 0;
-      world.y = mapH / 2;   // world y=0 at canvas vertical centre
+      world.y = CANVAS_H / 2;   // world y=0 at canvas vertical centre
       app.stage.addChild(world);
 
       buildStaticScene(world, mapData);
