@@ -452,6 +452,71 @@ function drawRiverMesh(parent, pts, width) {
 }
 
 // ---------------------------------------------------------------------------
+// Dashed center line (scaled to car_length)
+// ---------------------------------------------------------------------------
+function drawDashedCenterLine(g, fx, fy, tx, ty, car_length) {
+  const dashLen = car_length * 0.7;
+  const gapLen  = car_length * 0.5;
+  const dx = tx - fx, dy = ty - fy;
+  const len = Math.hypot(dx, dy);
+  if (len < dashLen * 2) return;
+  const ux = dx / len, uy = dy / len;
+  g.lineStyle(0.8, 0xffffff, 0.45, 0.5);
+  let d = gapLen;
+  while (d + dashLen < len - gapLen) {
+    g.moveTo(fx + ux * d,              fy + uy * d);
+    g.lineTo(fx + ux * (d + dashLen),  fy + uy * (d + dashLen));
+    d += dashLen + gapLen;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zebra crossings at both ends of every street
+// ---------------------------------------------------------------------------
+function drawZebraCrossings(g, nodes, streets, car_length) {
+  const SW       = car_length * 1.5;
+  const strW     = car_length * 0.15;   // stripe width across road
+  const strG     = car_length * 0.15;   // gap between stripes
+  const N        = 4;
+  const totalLat = N * strW + (N - 1) * strG;
+  const startLat = -totalLat / 2;
+  const offset   = CROSSING_R + car_length * 0.05;
+  const hl       = SW / 2;              // half-length along road direction
+
+  for (const [fi, ti] of streets) {
+    const [fx, fy] = nodes[fi];
+    const [tx, ty] = nodes[ti];
+    const dx = tx - fx, dy = ty - fy;
+    const len = Math.hypot(dx, dy);
+    if (len < offset * 2 + car_length) continue;
+
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;
+
+    for (const [nx, ny, sign] of [[fx, fy, 1], [tx, ty, -1]]) {
+      // Base position: offset from node along road direction
+      const bx = nx + ux * offset * sign;
+      const by = ny + uy * offset * sign;
+      for (let k = 0; k < N; k++) {
+        const lat = startLat + k * (strW + strG) + strW / 2;
+        const cx  = bx + px * lat;
+        const cy  = by + py * lat;
+        const hs  = strW / 2;
+        g.lineStyle(0);
+        g.beginFill(0xffffff, 0.75);
+        g.drawPolygon([
+          cx + ux * hl + px * hs, cy + uy * hl + py * hs,
+          cx - ux * hl + px * hs, cy - uy * hl + py * hs,
+          cx - ux * hl - px * hs, cy - uy * hl - py * hs,
+          cx + ux * hl - px * hs, cy + uy * hl - py * hs,
+        ]);
+        g.endFill();
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Scene builder
 // ---------------------------------------------------------------------------
 function buildStaticScene(parent, mapData) {
@@ -478,10 +543,10 @@ function buildStaticScene(parent, mapData) {
     g.lineStyle(STREET_WIDTH, COLORS.street, 1, 0.5);
     g.moveTo(fx, fy);
     g.lineTo(tx, ty);
-    g.lineStyle(1, COLORS.streetLine, 0.4, 0.5);
-    g.moveTo(fx, fy);
-    g.lineTo(tx, ty);
+    drawDashedCenterLine(g, fx, fy, tx, ty, mapData.car_length);
   }
+
+  drawZebraCrossings(g, nodes, streets, mapData.car_length);
 
   for (const [x, y] of nodes) {
     g.lineStyle(0.5, COLORS.crossingRim, 0.9);
