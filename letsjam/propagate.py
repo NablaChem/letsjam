@@ -10,6 +10,7 @@ from collections.abc import Callable
 from .graph import Map
 from .simulation import Trajectory, DISABLED
 
+STOP_DISTANCE = 8
 
 @dataclass
 class Car:
@@ -53,6 +54,32 @@ def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
                 dist=dist,
             )
         )
+
+    # Remove cars placed at or beyond the stop line.
+    for i, c in enumerate(cars):
+        if c.edge_id != DISABLED:
+            stop_line = max(0.0, map_.street_length(c.edge_id) - STOP_DISTANCE)
+            if c.dist >= stop_line:
+                c.edge_id = DISABLED
+
+    # Remove cars that overlap with another on the same street.
+    # For each street, walk front-to-back and disable any car whose front
+    # exceeds the rear of the nearest kept car ahead.
+    by_street: dict[int, list[int]] = defaultdict(list)
+    for i, c in enumerate(cars):
+        if c.edge_id != DISABLED:
+            by_street[c.edge_id].append(i)
+
+    for indices in by_street.values():
+        indices.sort(key=lambda i: cars[i].dist, reverse=True)  # front first
+        last_rear = math.inf
+        for idx in indices:
+            c = cars[idx]
+            if c.dist > last_rear:  # front inside the car ahead: remove
+                c.edge_id = DISABLED
+            else:
+                last_rear = c.dist - map_.car_visual_length(idx)
+
     return cars
 
 
@@ -64,7 +91,6 @@ def run_simulation(
     traffic_light: Callable,
 ) -> Trajectory:
     """Run a full simulation and return the trajectory."""
-    stop_distance = 8
     inbound, outbound = _build_graph(map_)
     cars = _place_cars(map_, inbound)
     n = map_.n_cars
@@ -89,9 +115,15 @@ def run_simulation(
 
             inbound_data: list[list[tuple[float, float]]] = [
                 sorted(
-                    [(c.dist, c.velocity) for c in cars if c.edge_id == s],
+                    [
+                        (
+                            max(0.0, map_.street_length(s) - STOP_DISTANCE) - c.dist,
+                            c.velocity,
+                        )
+                        for c in cars
+                        if c.edge_id == s
+                    ],
                     key=lambda x: x[0],
-                    reverse=True,
                 )
                 for s in ins
             ]
@@ -128,7 +160,7 @@ def run_simulation(
 
             _, dest_node = map_.streets[street_id]
             street_length = map_.street_length(street_id)
-            stop_line = max(0.0, street_length - stop_distance)
+            stop_line = max(0.0, street_length - STOP_DISTANCE)
             ins = inbound[dest_node]
             inbound_idx = ins.index(street_id)
             green_here = light_green[dest_node] == inbound_idx

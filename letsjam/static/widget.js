@@ -323,6 +323,11 @@ export async function render({ model, el }) {
   playBtn.textContent = "Play";
   controls.appendChild(playBtn);
 
+  const replayBtn = document.createElement("button");
+  replayBtn.className = "letsjam-btn";
+  replayBtn.textContent = "Replay";
+  controls.appendChild(replayBtn);
+
   const speedWrap = document.createElement("div");
   speedWrap.className = "letsjam-speed-wrap";
   speedWrap.innerHTML =
@@ -378,7 +383,7 @@ export async function render({ model, el }) {
       if (fracFrame >= traj.n_frames - 1) {
         fracFrame = traj.n_frames - 1;
         playing = false;
-        playBtn.textContent = "Replay";
+        playBtn.textContent = "Play";
       }
     }
     lastTs = ts;
@@ -396,6 +401,13 @@ export async function render({ model, el }) {
     if (fracFrame >= traj.n_frames - 1) fracFrame = 0;
     playing = !playing;
     playBtn.textContent = playing ? "Pause" : "Play";
+  });
+
+  replayBtn.addEventListener("click", () => {
+    if (!traj) return;
+    fracFrame = 0;
+    playing = true;
+    playBtn.textContent = "Pause";
   });
 
   el.tabIndex = 0;
