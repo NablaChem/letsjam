@@ -164,7 +164,35 @@ class SmallTown(ChallengeMap):
         streets.append((n_top_right, n_bottom_right))
         streets.append((n_bottom_left, n_bottom_right))
         streets.append((n_bottom_right, n_sink))
-        return Map(nodes=nodes, streets=streets, width=w)
+
+        m = Map(nodes=nodes, streets=streets, width=w)
+
+        # River winding around the perimeter (U-shape, top → right → bottom)
+        m.add_river([
+            (0,    50),
+            (30,   53),
+            (80,   49),
+            (160,  52),
+            (210,  51),
+            (216,  22),
+            (218,   0),
+            (216, -22),
+            (210, -51),
+            (160, -52),
+            (80,  -49),
+            (30,  -53),
+            (0,   -50),
+        ], width=14)
+
+        # Park in the centre block formed by the four intersections
+        m.add_park([
+            (76,  -18),
+            (144, -20),
+            (148,  17),
+            (72,   19),
+        ])
+
+        return m
 
 
 __all__ = ["ChallengeMap", "Highway", "MainStreet", "SmallTown"]

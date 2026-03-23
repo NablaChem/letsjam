@@ -164,28 +164,184 @@ function updateStopLines(g, mapData, inbound, lightsData, fracFrame) {
 }
 
 // ---------------------------------------------------------------------------
+// Decoration mesh helpers
+// ---------------------------------------------------------------------------
+const MESH_CELL = 8; // triangle grid cell size in world units
+
+function pointInPolygon(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i][0], yi = pts[i][1];
+    const xj = pts[j][0], yj = pts[j][1];
+    if ((yi > py) !== (yj > py) &&
+        px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function randomShade(baseColor, range) {
+  const f = (Math.random() - 0.5) * range;
+  const r = (baseColor >> 16) & 0xff;
+  const g = (baseColor >>  8) & 0xff;
+  const b =  baseColor        & 0xff;
+  const blend = (c) => Math.min(255, Math.max(0,
+    f > 0 ? Math.round(c + (255 - c) * f) : Math.round(c * (1 + f))
+  ));
+  return (blend(r) << 16) | (blend(g) << 8) | blend(b);
+}
+
+function drawParkMesh(parent, pts) {
+  const container = new PIXI.Container();
+  parent.addChild(container);
+
+  // Mask to clip triangles to the polygon boundary
+  const mask = new PIXI.Graphics();
+  mask.beginFill(0xffffff);
+  mask.drawPolygon(pts.flat());
+  mask.endFill();
+  container.addChild(mask);
+  container.mask = mask;
+
+  const g = new PIXI.Graphics();
+  container.addChild(g);
+
+  const xs = pts.map(p => p[0]);
+  const ys = pts.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  for (let x = minX; x < maxX; x += MESH_CELL) {
+    for (let y = minY; y < maxY; y += MESH_CELL) {
+      const x1 = x + MESH_CELL, y1 = y + MESH_CELL;
+      const tris = [
+        [x, y,   x1, y,   x,  y1],
+        [x1, y,  x1, y1,  x,  y1],
+      ];
+      for (const tri of tris) {
+        g.lineStyle(0);
+        g.beginFill(randomShade(COLORS.parkFill, 0.4), 1);
+        g.drawPolygon(tri);
+        g.endFill();
+      }
+    }
+  }
+
+}
+
+// Catmull-Rom spline through pts ([x,y] array).
+// Endpoints extended by mirroring the adjacent segment.
+function catmullRomSpline(pts, samplesPerSegment = 10) {
+  if (pts.length < 2) return pts.slice();
+  const ext = [
+    [2*pts[0][0] - pts[1][0],               2*pts[0][1] - pts[1][1]],
+    ...pts,
+    [2*pts[pts.length-1][0] - pts[pts.length-2][0],
+     2*pts[pts.length-1][1] - pts[pts.length-2][1]],
+  ];
+  const result = [];
+  for (let i = 1; i < ext.length - 2; i++) {
+    const [p0, p1, p2, p3] = [ext[i-1], ext[i], ext[i+1], ext[i+2]];
+    for (let s = 0; s < samplesPerSegment; s++) {
+      const t = s / samplesPerSegment, t2 = t*t, t3 = t2*t;
+      result.push([
+        0.5*((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+        0.5*((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
+      ]);
+    }
+  }
+  result.push([...pts[pts.length-1]]);
+  return result;
+}
+
+// Buffer a polyline by halfWidth; returns flat [x,y,...] closed polygon.
+function bufferPolyline(pts, halfWidth) {
+  const n = pts.length;
+  const left = [], right = [];
+  for (let i = 0; i < n; i++) {
+    let nx, ny;
+    if (i === 0) {
+      const dx = pts[1][0]-pts[0][0], dy = pts[1][1]-pts[0][1];
+      const l = Math.hypot(dx, dy) || 1;
+      nx = -dy/l; ny = dx/l;
+    } else if (i === n-1) {
+      const dx = pts[n-1][0]-pts[n-2][0], dy = pts[n-1][1]-pts[n-2][1];
+      const l = Math.hypot(dx, dy) || 1;
+      nx = -dy/l; ny = dx/l;
+    } else {
+      const dx0 = pts[i][0]-pts[i-1][0], dy0 = pts[i][1]-pts[i-1][1];
+      const l0 = Math.hypot(dx0, dy0) || 1;
+      const dx1 = pts[i+1][0]-pts[i][0], dy1 = pts[i+1][1]-pts[i][1];
+      const l1 = Math.hypot(dx1, dy1) || 1;
+      nx = -dy0/l0 + -dy1/l1;
+      ny =  dx0/l0 +  dx1/l1;
+      const nl = Math.hypot(nx, ny) || 1;
+      nx /= nl; ny /= nl;
+    }
+    left.push( [pts[i][0] + nx*halfWidth, pts[i][1] + ny*halfWidth]);
+    right.push([pts[i][0] - nx*halfWidth, pts[i][1] - ny*halfWidth]);
+  }
+  const poly = [];
+  for (const p of left)                        poly.push(p[0], p[1]);
+  for (let i = right.length-1; i >= 0; i--)   poly.push(right[i][0], right[i][1]);
+  return poly;
+}
+
+function drawRiverMesh(parent, pts, width) {
+  const hw = (width ?? 8) / 2;
+  const smooth = catmullRomSpline(pts, 10);
+  const poly   = bufferPolyline(smooth, hw);
+
+  const container = new PIXI.Container();
+  parent.addChild(container);
+
+  const mask = new PIXI.Graphics();
+  mask.beginFill(0xffffff);
+  mask.drawPolygon(poly);
+  mask.endFill();
+  container.addChild(mask);
+  container.mask = mask;
+
+  const g = new PIXI.Graphics();
+  container.addChild(g);
+
+  const xs = [], ys = [];
+  for (let i = 0; i < poly.length; i += 2) { xs.push(poly[i]); ys.push(poly[i+1]); }
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  for (let x = minX; x < maxX; x += MESH_CELL) {
+    for (let y = minY; y < maxY; y += MESH_CELL) {
+      const x1 = x + MESH_CELL, y1 = y + MESH_CELL;
+      const tris = [
+        [x, y,  x1, y,  x,  y1],
+        [x1, y, x1, y1, x,  y1],
+      ];
+      for (const tri of tris) {
+        g.lineStyle(0);
+        g.beginFill(randomShade(COLORS.riverFill, 0.4), 1);
+        g.drawPolygon(tri);
+        g.endFill();
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Scene builder
 // ---------------------------------------------------------------------------
 function buildStaticScene(parent, mapData) {
   const { nodes, streets, decorations } = mapData;
+
+  // Parks and rivers use masked containers — add before streets so roads render on top
+  for (const dec of (decorations || [])) {
+    if (dec.type === "park")  drawParkMesh(parent, dec.points);
+    if (dec.type === "river") drawRiverMesh(parent, dec.points, dec.width);
+  }
+
   const g = new PIXI.Graphics();
   parent.addChild(g);
-
-  for (const dec of (decorations || [])) {
-    const pts = dec.points;
-    if (dec.type === "park") {
-      g.lineStyle(1.5, COLORS.parkBorder, 1);
-      g.beginFill(COLORS.parkFill, 0.85);
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
-      g.closePath();
-      g.endFill();
-    } else if (dec.type === "river") {
-      g.lineStyle(dec.width ?? 8, COLORS.riverFill, 0.9, 0.5);
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
-    }
-  }
 
   for (let i = 0; i < streets.length; i++) {
     const [fi, ti] = streets[i];
