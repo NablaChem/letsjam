@@ -81,6 +81,8 @@ const COLORS = {
   riverFill: 0x3b82f6,
 };
 
+const HOUSE_COLORS = [0xf5d98b, 0xf0c96a, 0xefc14a, 0xf2d070, 0xf8e4a0, 0xf0b84a, 0xfad688, 0xeab84e];
+
 const CROSSING_R = 5;
 const CAR_WIDTH = 3;
 const STOP_DISTANCE = 8;   // must match propagate.py stop_distance
@@ -289,6 +291,126 @@ function bufferPolyline(pts, halfWidth) {
   return poly;
 }
 
+// ---------------------------------------------------------------------------
+// House placement
+// ---------------------------------------------------------------------------
+
+function placeHouses(mapData) {
+  const { nodes, streets, decorations, car_length } = mapData;
+  const SW = car_length * 1.5;                 // street width
+
+  const HW_MIN = car_length * 0.6,  HW_MAX = car_length * 1.3;   // house length range
+  const HD_MIN = car_length * 0.45, HD_MAX = car_length * 0.85;   // house depth range
+  const GAP = car_length * 0.4;               // gap from street edge to house edge
+  const INTERVAL_MIN = car_length * 1.4;      // minimum spacing between house starts
+  const INTERVAL_MAX = car_length * 3.2;      // maximum spacing
+  const CLEARANCE = car_length * 0.2;         // extra buffer between houses
+  // Worst-case bounding radius for collision checks
+  const houseR = Math.hypot(HW_MAX, HD_MAX) / 2 + CLEARANCE;
+
+  const parks = (decorations || []).filter(d => d.type === 'park').map(d => d.points);
+  const rivers = (decorations || []).filter(d => d.type === 'river');
+
+  function inAnyPark(x, y) {
+    return parks.some(poly => pointInPolygon(x, y, poly));
+  }
+
+  function nearAnyRiver(x, y) {
+    for (const river of rivers) {
+      const pts = river.points;
+      const minDist = (river.width ?? 8) / 2 + GAP + HD_MAX / 2;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+        const rdx = bx - ax, rdy = by - ay;
+        const len2 = rdx * rdx + rdy * rdy;
+        if (len2 === 0) continue;
+        const t = Math.max(0, Math.min(1, ((x - ax) * rdx + (y - ay) * rdy) / len2));
+        if (Math.hypot(x - (ax + t * rdx), y - (ay + t * rdy)) < minDist) return true;
+      }
+    }
+    return false;
+  }
+
+  const placed = [];
+
+  function canPlace(x, y) {
+    if (inAnyPark(x, y)) return false;
+    if (nearAnyRiver(x, y)) return false;
+    return placed.every(h => Math.hypot(x - h.x, y - h.y) >= houseR * 2);
+  }
+
+  const houses = [];
+  const margin = car_length * 1.5;  // keep clear of intersections
+
+  for (const [fi, ti] of streets) {
+    const [fx, fy] = nodes[fi];
+    const [tx, ty] = nodes[ti];
+    const sdx = tx - fx, sdy = ty - fy;
+    const len = Math.hypot(sdx, sdy);
+    if (len < margin * 2 + INTERVAL_MIN) continue;
+
+    const ux = sdx / len, uy = sdy / len;   // unit along street
+    const px = -uy, py = ux;                 // unit perpendicular (left)
+    const angle = Math.atan2(sdy, sdx);
+
+    let t = margin + Math.random() * INTERVAL_MIN;
+
+    while (t < len - margin) {
+      for (const side of [1, -1]) {
+        const hw = HW_MIN + Math.random() * (HW_MAX - HW_MIN);
+        const hd = HD_MIN + Math.random() * (HD_MAX - HD_MIN);
+        const offset = SW / 2 + GAP + hd / 2;
+
+        const hx = fx + ux * t + px * offset * side;
+        const hy = fy + uy * t + py * offset * side;
+
+        if (!canPlace(hx, hy)) continue;
+
+        // Check all 4 corners against parks and rivers
+        const corners = [
+          [hx + ux * (hw / 2) + px * (hd / 2), hy + uy * (hw / 2) + py * (hd / 2)],
+          [hx - ux * (hw / 2) + px * (hd / 2), hy - uy * (hw / 2) + py * (hd / 2)],
+          [hx + ux * (hw / 2) - px * (hd / 2), hy + uy * (hw / 2) - py * (hd / 2)],
+          [hx - ux * (hw / 2) - px * (hd / 2), hy - uy * (hw / 2) - py * (hd / 2)],
+        ];
+        if (corners.some(([cx, cy]) => inAnyPark(cx, cy) || nearAnyRiver(cx, cy))) continue;
+
+        placed.push({ x: hx, y: hy });
+        houses.push({
+          x: hx, y: hy, w: hw, d: hd, angle,
+          color: HOUSE_COLORS[Math.floor(Math.random() * HOUSE_COLORS.length)],
+        });
+      }
+      t += INTERVAL_MIN + Math.random() * (INTERVAL_MAX - INTERVAL_MIN);
+    }
+  }
+
+  return houses;
+}
+
+function drawHouses(parent, houses) {
+  if (houses.length === 0) return;
+  const g = new PIXI.Graphics();
+  parent.addChild(g);
+
+  for (const h of houses) {
+    const hw = h.w / 2, hd = h.d / 2;
+    const cos = Math.cos(h.angle), sin = Math.sin(h.angle);
+    // Rotate corners from local space (x=along street, y=perpendicular) to world
+    const pts = [
+      [ hw * cos - hd * sin,  hw * sin + hd * cos],
+      [-hw * cos - hd * sin, -hw * sin + hd * cos],
+      [-hw * cos + hd * sin, -hw * sin - hd * cos],
+      [ hw * cos + hd * sin,  hw * sin - hd * cos],
+    ].flatMap(([ox, oy]) => [h.x + ox, h.y + oy]);
+
+    g.lineStyle(0.5, 0x000000, 0.25);
+    g.beginFill(h.color, 1);
+    g.drawPolygon(pts);
+    g.endFill();
+  }
+}
+
 function drawRiverMesh(parent, pts, width) {
   const hw = (width ?? 8) / 2;
   const smooth = catmullRomSpline(pts, 10);
@@ -340,6 +462,9 @@ function buildStaticScene(parent, mapData) {
     if (dec.type === "park")  drawParkMesh(parent, dec.points);
     if (dec.type === "river") drawRiverMesh(parent, dec.points, dec.width);
   }
+
+  // Houses sit between green areas and streets
+  drawHouses(parent, placeHouses(mapData));
 
   const STREET_WIDTH = mapData.car_length * 1.5;
 
