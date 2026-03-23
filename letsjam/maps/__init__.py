@@ -99,6 +99,51 @@ class NoEscape(ChallengeMap):
         return m
 
 
+class BabySteps(ChallengeMap):
+    name = "baby_steps"
+    WIDTH = 320.0
+
+    @classmethod
+    def build(cls) -> Map:
+        w = cls.WIDTH
+
+        nodes: list[tuple[float, float]] = []
+        streets: list[tuple[int, int]] = []
+
+        n_src = len(nodes)
+        nodes.append((-10.0, 50))
+        n_left = len(nodes)
+        nodes.append((w * 0.7, 50))
+        n_right = len(nodes)
+        nodes.append((w * 0.3, -50))
+        n_sink = len(nodes)
+        nodes.append((w + 10, -50))
+        streets.append((n_src, n_left))
+        streets.append((n_left, n_right))
+        streets.append((n_right, n_sink))
+
+        m = Map(nodes=nodes, streets=streets, width=w)
+        m.add_river(
+            [
+                (-20, -20),
+                (40, 80),
+                (200, -50),
+                (400, 50),
+            ],
+            width=14,
+        )
+
+        m.add_park(
+            [
+                (-10, -200),
+                (w, -200),
+                (w, 200),
+                (-10, 400),
+            ]
+        )
+        return m
+
+
 class Highway(ChallengeMap):
     """Three parallel lanes running left to right.
 

@@ -212,7 +212,7 @@ def run_simulation(
                 dist_to_light = math.inf if green_here else max(0.0, stop_line - c.dist)
 
                 delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
-                c.velocity = max(0.0, min(10.0, c.velocity + delta))
+                c.velocity = max(0.0, min(10.0, c.velocity + min(delta, 1)))
                 new_dist = c.dist + c.velocity
 
                 # rear-end prevention: keep gap >= length of car ahead
@@ -262,7 +262,8 @@ def run_simulation(
                     if first_on >= car_len:  # space available: turn
                         cur_dir = map_.street_direction(street_id)
                         dot = cur_dir[0] * exit_dirs[exit_idx][0] + cur_dir[1] * exit_dirs[exit_idx][1]
-                        c.velocity = c.velocity * max(0.0, dot)
+                        _angle = math.acos(max(-1.0, min(1.0, dot)))
+                        c.velocity = c.velocity * max(0.1, 1.0 - _angle / math.pi)
                         c.edge_id = target
                         c.dist = max(0.0, new_dist - street_length)
                     else:  # target blocked: hold
