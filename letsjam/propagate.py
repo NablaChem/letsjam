@@ -261,8 +261,11 @@ def run_simulation(
                     )
 
                     if first_on >= car_len:  # space available: turn
+                        cur_dir = map_.street_direction(street_id)
+                        dot = cur_dir[0] * exit_dirs[exit_idx][0] + cur_dir[1] * exit_dirs[exit_idx][1]
+                        c.velocity = c.velocity * max(0.0, dot)
                         c.edge_id = target
-                        c.dist = 0.0
+                        c.dist = max(0.0, new_dist - street_length)
                     else:  # target blocked: hold
                         c.dist = street_length - car_len
                         c.velocity = 0.0
