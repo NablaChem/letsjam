@@ -33,52 +33,80 @@ def _build_graph(map_: Map) -> tuple[dict[int, list[int]], dict[int, list[int]]]
 
 
 def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
-    """Randomly place cars on source streets (streets from nodes with no inbound)."""
+    """Place cars on source streets, guaranteeing valid non-overlapping positions.
+
+    Cars are distributed round-robin across all source streets.  For each
+    source street the source node is moved further off-screen as needed so
+    the street is long enough to hold its cars with:
+      - 10 % extra total body length distributed as k random gaps
+        (one leading gap per car, front-to-back), and
+      - at least STOP_DISTANCE clearance between the frontmost car and
+        the stop line, so a red light at frame 0 is always safe.
+
+    The source node is never moved closer than its original position, so it
+    can never appear on-screen.
+    """
     source_streets = [
         s for s, (from_node, _) in enumerate(map_.streets) if not inbound[from_node]
     ]
-    cars: list[Car] = []
+
+    # All cars start disabled; only placed ones get an edge_id.
+    cars: list[Car] = [
+        Car(kind=map_.car_types[i], fuel=0.0, velocity=0.0, edge_id=DISABLED, dist=0.0)
+        for i in range(map_.n_cars)
+    ]
+
+    if not source_streets:
+        return cars
+
+    # Round-robin assignment: car i → source_streets[i % n_sources]
+    assigned: dict[int, list[int]] = {s: [] for s in source_streets}
     for i in range(map_.n_cars):
-        if source_streets:
-            edge_id = random.choice(source_streets)
-            dist = random.uniform(0.0, map_.street_length(edge_id))
+        assigned[source_streets[i % len(source_streets)]].append(i)
+
+    for street_id, car_indices in assigned.items():
+        if not car_indices:
+            continue
+
+        car_lens = [map_.car_visual_length(i) for i in car_indices]
+        S = sum(car_lens)          # total body length on this street
+        G = 0.1 * S                # total gap space (10 % extra)
+
+        # Move source node so the street is long enough.
+        # required_length ≥ cur_len  → source never moves on-screen.
+        # required_length ≥ S*1.1 + 2*STOP_DISTANCE → stop_line lands at
+        #   S*1.1 + STOP_DISTANCE, giving a full STOP_DISTANCE clearance
+        #   between the frontmost car (placed at cursor = S*1.1) and the
+        #   stop line before any movement happens.
+        from_node, to_node = map_.streets[street_id]
+        tx, ty = map_.nodes[to_node]
+        sx, sy = map_.nodes[from_node]
+        cur_len = math.hypot(tx - sx, ty - sy)
+        if cur_len > 0:
+            ux, uy = (sx - tx) / cur_len, (sy - ty) / cur_len
         else:
-            edge_id = DISABLED
-            dist = 0.0
-        cars.append(
-            Car(
-                kind=map_.car_types[i],
+            ux, uy = -1.0, 0.0
+        required_length = max(S * 1.1 + 2 * STOP_DISTANCE, cur_len)
+        map_.nodes[from_node] = (tx + ux * required_length, ty + uy * required_length)
+
+        # Sample k gaps, normalise to sum G.
+        raw = [random.random() for _ in car_indices]
+        scale = G / sum(raw)
+        gaps = [r * scale for r in raw]
+
+        # Place cars front-to-back: gap then car, gap then car, …
+        # cursor starts at S*1.1, which is STOP_DISTANCE below the stop line.
+        cursor = S * 1.1
+        for car_idx, car_len, gap in zip(car_indices, car_lens, gaps):
+            cursor -= gap
+            cars[car_idx] = Car(
+                kind=map_.car_types[car_idx],
                 fuel=0.0,
                 velocity=0.0,
-                edge_id=edge_id,
-                dist=dist,
+                edge_id=street_id,
+                dist=cursor,
             )
-        )
-
-    # Remove cars placed at or beyond the stop line.
-    for i, c in enumerate(cars):
-        if c.edge_id != DISABLED:
-            stop_line = max(0.0, map_.street_length(c.edge_id) - STOP_DISTANCE)
-            if c.dist >= stop_line:
-                c.edge_id = DISABLED
-
-    # Remove cars that overlap with another on the same street.
-    # For each street, walk front-to-back and disable any car whose front
-    # exceeds the rear of the nearest kept car ahead.
-    by_street: dict[int, list[int]] = defaultdict(list)
-    for i, c in enumerate(cars):
-        if c.edge_id != DISABLED:
-            by_street[c.edge_id].append(i)
-
-    for indices in by_street.values():
-        indices.sort(key=lambda i: cars[i].dist, reverse=True)  # front first
-        last_rear = math.inf
-        for idx in indices:
-            c = cars[idx]
-            if c.dist > last_rear:  # front inside the car ahead: remove
-                c.edge_id = DISABLED
-            else:
-                last_rear = c.dist - map_.car_visual_length(idx)
+            cursor -= car_len
 
     return cars
 
