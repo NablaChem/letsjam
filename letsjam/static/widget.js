@@ -81,7 +81,6 @@ const COLORS = {
   riverFill: 0x3b82f6,
 };
 
-const STREET_WIDTH = 6;
 const CROSSING_R = 5;
 const CAR_WIDTH = 3;
 const STOP_DISTANCE = 8;   // must match propagate.py stop_distance
@@ -117,6 +116,7 @@ function updateStopLines(g, mapData, inbound, lightsData, fracFrame) {
   g.clear();
   if (!lightsData) return;
   const { nodes, streets } = mapData;
+  const STREET_WIDTH = mapData.car_length * 1.5;
   const { data, n_nodes } = lightsData;
   const frame = Math.min(Math.floor(fracFrame), lightsData.n_frames - 1);
 
@@ -212,16 +212,17 @@ function drawParkMesh(parent, pts) {
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
 
-  for (let x = minX; x < maxX; x += MESH_CELL) {
-    for (let y = minY; y < maxY; y += MESH_CELL) {
-      const x1 = x + MESH_CELL, y1 = y + MESH_CELL;
+  const cell = MESH_CELL * 2;
+  for (let x = minX; x < maxX; x += cell) {
+    for (let y = minY; y < maxY; y += cell) {
+      const x1 = x + cell, y1 = y + cell;
       const tris = [
         [x, y,   x1, y,   x,  y1],
         [x1, y,  x1, y1,  x,  y1],
       ];
       for (const tri of tris) {
         g.lineStyle(0);
-        g.beginFill(randomShade(COLORS.parkFill, 0.4), 1);
+        g.beginFill(randomShade(COLORS.parkFill, 0.2), 1);
         g.drawPolygon(tri);
         g.endFill();
       }
@@ -340,6 +341,8 @@ function buildStaticScene(parent, mapData) {
     if (dec.type === "river") drawRiverMesh(parent, dec.points, dec.width);
   }
 
+  const STREET_WIDTH = mapData.car_length * 1.5;
+
   const g = new PIXI.Graphics();
   parent.addChild(g);
 
@@ -356,9 +359,14 @@ function buildStaticScene(parent, mapData) {
   }
 
   for (const [x, y] of nodes) {
-    g.lineStyle(1.5, COLORS.crossingRim, 0.9);
+    g.lineStyle(0.5, COLORS.crossingRim, 0.9);
     g.beginFill(COLORS.crossing, 1);
-    g.drawCircle(x, y, CROSSING_R);
+    const octPts = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI * 2) / 8 + Math.PI / 8;
+      octPts.push(x + Math.cos(a) * CROSSING_R, y + Math.sin(a) * CROSSING_R);
+    }
+    g.drawPolygon(octPts);
     g.endFill();
   }
 
