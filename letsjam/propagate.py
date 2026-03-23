@@ -176,8 +176,9 @@ def run_simulation(
                         ahead_len = map_.car_visual_length(ahead_idx)
                         bumper = ahead.dist - ahead_len
                         dist_to_next = bumper - c.dist
-                    else:
-                        dist_to_next = math.inf
+                    else:  # car ahead just crossed: treat end of street as bumper
+                        bumper = street_length
+                        dist_to_next = street_length - c.dist
                 else:
                     dist_to_next = math.inf
 
@@ -218,13 +219,14 @@ def run_simulation(
                     ]
                     exit_idx = car_turn(exit_dirs, first_cars)
 
+                    car_len = map_.car_visual_length(car_idx)
+
                     if not (0 <= exit_idx < len(outs)):  # invalid answer: block
-                        c.dist = street_length
+                        c.dist = street_length - car_len
                         c.velocity = 0.0
                         continue
 
                     target = outs[exit_idx]
-                    car_len = map_.car_visual_length(car_idx)
                     first_on = min(
                         (cars[i].dist for i in range(n) if cars[i].edge_id == target),
                         default=math.inf,
@@ -234,7 +236,7 @@ def run_simulation(
                         c.edge_id = target
                         c.dist = 0.0
                     else:  # target blocked: hold
-                        c.dist = street_length
+                        c.dist = street_length - car_len
                         c.velocity = 0.0
                 else:
                     c.dist = new_dist
