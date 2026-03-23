@@ -411,10 +411,21 @@ function drawHouses(parent, houses) {
   }
 }
 
-function drawRiverMesh(parent, pts, width) {
+function drawRiverMesh(parent, pts, width, bgPadding) {
   const hw = (width ?? 8) / 2;
   const smooth = catmullRomSpline(pts, 10);
   const poly   = bufferPolyline(smooth, hw);
+
+  // Background clearing strip so forests don't touch rivers
+  if (bgPadding) {
+    const bgPoly = bufferPolyline(smooth, hw + bgPadding);
+    const bg = new PIXI.Graphics();
+    bg.lineStyle(0);
+    bg.beginFill(COLORS.background, 1);
+    bg.drawPolygon(bgPoly);
+    bg.endFill();
+    parent.addChild(bg);
+  }
 
   const container = new PIXI.Container();
   parent.addChild(container);
@@ -522,20 +533,43 @@ function drawZebraCrossings(g, nodes, streets, car_length) {
 function buildStaticScene(parent, mapData) {
   const { nodes, streets, decorations } = mapData;
 
-  // Parks and rivers use masked containers — add before streets so roads render on top
+  // Parks first, then rivers on top of parks
   for (const dec of (decorations || [])) {
-    if (dec.type === "park")  drawParkMesh(parent, dec.points);
-    if (dec.type === "river") drawRiverMesh(parent, dec.points, dec.width);
+    if (dec.type === "park") drawParkMesh(parent, dec.points);
+  }
+  for (const dec of (decorations || [])) {
+    if (dec.type === "river") drawRiverMesh(parent, dec.points, dec.width, mapData.car_length * 0.25);
   }
 
   // Houses sit between green areas and streets
   drawHouses(parent, placeHouses(mapData));
 
   const STREET_WIDTH = mapData.car_length * 1.5;
+  const BG_STREET_WIDTH = STREET_WIDTH + mapData.car_length;  // wider clearing strip
+  const BG_CROSSING_R = BG_STREET_WIDTH / 2;
 
   const g = new PIXI.Graphics();
   parent.addChild(g);
 
+  // Background clearing strips so terrain doesn't touch streets
+  for (let i = 0; i < streets.length; i++) {
+    const [fi, ti] = streets[i];
+    const [fx, fy] = nodes[fi];
+    const [tx, ty] = nodes[ti];
+    g.lineStyle(BG_STREET_WIDTH, COLORS.background, 1, 0.5);
+    g.moveTo(fx, fy);
+    g.lineTo(tx, ty);
+  }
+
+  // Background circles at crossings
+  for (const [x, y] of nodes) {
+    g.lineStyle(0);
+    g.beginFill(COLORS.background, 1);
+    g.drawCircle(x, y, BG_CROSSING_R);
+    g.endFill();
+  }
+
+  // Actual streets on top of clearing layer
   for (let i = 0; i < streets.length; i++) {
     const [fi, ti] = streets[i];
     const [fx, fy] = nodes[fi];

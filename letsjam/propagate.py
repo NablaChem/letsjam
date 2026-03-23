@@ -204,9 +204,8 @@ def run_simulation(
                         ahead_len = map_.car_visual_length(ahead_idx)
                         bumper = ahead.dist - ahead_len
                         dist_to_next = bumper - c.dist
-                    else:  # car ahead just crossed: treat end of street as bumper
-                        bumper = street_length
-                        dist_to_next = street_length - c.dist
+                    else:  # car ahead just crossed: no obstruction on this street
+                        dist_to_next = math.inf
                 else:
                     dist_to_next = math.inf
 
