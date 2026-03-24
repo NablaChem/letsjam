@@ -278,9 +278,9 @@ class SmallTown(ChallengeMap):
         # Park in the centre block formed by the four intersections
         m.add_park(
             [
-                (76, -18),
-                (144, -20),
-                (148, 17),
+                (72, -19),
+                (148, -19),
+                (148, 19),
                 (72, 19),
             ]
         )

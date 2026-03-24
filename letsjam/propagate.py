@@ -11,6 +11,7 @@ from .graph import Map
 from .simulation import Trajectory, DISABLED
 
 STOP_DISTANCE = 8
+MIN_SPAWN_GAP = 2.0  # minimum bumper-to-bumper distance between spawned vehicles
 
 @dataclass
 class Car:
@@ -59,27 +60,37 @@ def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
     if not source_streets:
         return cars
 
-    # Round-robin assignment: shuffle first so types are interleaved
+    # Weighted allocation: each source gets cars proportional to its weight.
+    weights = [max(0.0, map_.source_weights.get(s, 1.0)) for s in source_streets]
+    total_w = sum(weights) or 1.0
+    n_total = map_.n_cars
+    exact = [w / total_w * n_total for w in weights]
+    floors = [int(e) for e in exact]
+    remainders = [e - f for e, f in zip(exact, floors)]
+    deficit = n_total - sum(floors)
+    for i in sorted(range(len(source_streets)), key=lambda i: -remainders[i])[:deficit]:
+        floors[i] += 1
+
+    # Shuffle car indices so types are interleaved, then slice per source.
     indices = list(range(map_.n_cars))
     random.shuffle(indices)
-    assigned: dict[int, list[int]] = {s: [] for s in source_streets}
-    for i, car_idx in enumerate(indices):
-        assigned[source_streets[i % len(source_streets)]].append(car_idx)
+    assigned: dict[int, list[int]] = {}
+    cursor_idx = 0
+    for j, street_id in enumerate(source_streets):
+        assigned[street_id] = indices[cursor_idx : cursor_idx + floors[j]]
+        cursor_idx += floors[j]
 
     for street_id, car_indices in assigned.items():
         if not car_indices:
             continue
 
         car_lens = [map_.car_visual_length(i) for i in car_indices]
-        S = sum(car_lens)          # total body length on this street
-        G = 0.1 * S                # total gap space (10 % extra)
+        S = sum(car_lens)                                   # total body length
+        k = len(car_indices)
+        # Each pair gets at least MIN_SPAWN_GAP; remainder is distributed randomly.
+        G = max(0.1 * S, MIN_SPAWN_GAP * k)                # total gap space
 
         # Move source node so the street is long enough.
-        # required_length ≥ cur_len  → source never moves on-screen.
-        # required_length ≥ S*1.1 + 2*STOP_DISTANCE → stop_line lands at
-        #   S*1.1 + STOP_DISTANCE, giving a full STOP_DISTANCE clearance
-        #   between the frontmost car (placed at cursor = S*1.1) and the
-        #   stop line before any movement happens.
         from_node, to_node = map_.streets[street_id]
         tx, ty = map_.nodes[to_node]
         sx, sy = map_.nodes[from_node]
@@ -88,27 +99,28 @@ def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
             ux, uy = (sx - tx) / cur_len, (sy - ty) / cur_len
         else:
             ux, uy = -1.0, 0.0
-        required_length = max(S * 1.1 + 2 * STOP_DISTANCE, cur_len)
+        required_length = max(S + G + 2 * STOP_DISTANCE, cur_len)
         map_.nodes[from_node] = (tx + ux * required_length, ty + uy * required_length)
 
-        # Sample k gaps, normalise to sum G.
+        # Each gap = MIN_SPAWN_GAP + a random share of the extra budget.
+        extra = G - MIN_SPAWN_GAP * k
         raw = [random.random() for _ in car_indices]
-        scale = G / sum(raw)
-        gaps = [r * scale for r in raw]
+        raw_sum = sum(raw) or 1.0
+        gaps = [MIN_SPAWN_GAP + r / raw_sum * extra for r in raw]
 
         # Place cars front-to-back: gap then car, gap then car, …
-        # cursor starts at S*1.1, which is STOP_DISTANCE below the stop line.
-        cursor = S * 1.1
+        # cursor starts at S+G, which is STOP_DISTANCE below the stop line.
+        spawn_cursor = S + G
         for car_idx, car_len, gap in zip(car_indices, car_lens, gaps):
-            cursor -= gap
+            spawn_cursor -= gap
             cars[car_idx] = Car(
                 kind=map_.car_types[car_idx],
                 fuel=0.0,
                 velocity=0.0,
                 edge_id=street_id,
-                dist=cursor,
+                dist=spawn_cursor,
             )
-            cursor -= car_len
+            spawn_cursor -= car_len
 
     return cars
 
@@ -197,6 +209,7 @@ def run_simulation(
 
             for rank, car_idx in enumerate(car_indices):
                 c = cars[car_idx]
+                cur_len = map_.car_visual_length(car_idx)
 
                 bumper = math.inf
                 if rank > 0:
@@ -204,14 +217,16 @@ def run_simulation(
                     ahead = cars[ahead_idx]
                     if ahead.edge_id == street_id:  # still on same street
                         ahead_len = map_.car_visual_length(ahead_idx)
-                        bumper = ahead.dist - ahead_len
+                        # dist is rendered as vehicle centre, so pack centre-to-centre
+                        bumper = ahead.dist - ahead_len / 2 - cur_len / 2
                         dist_to_next = bumper - c.dist
                     else:  # car ahead just crossed: no obstruction on this street
                         dist_to_next = math.inf
                 else:
                     dist_to_next = math.inf
 
-                dist_to_light = math.inf if green_here else max(0.0, stop_line - c.dist)
+                # distance from car front to stop line (front = centre + half-length)
+                dist_to_light = math.inf if green_here else max(0.0, stop_line - cur_len / 2 - c.dist)
 
                 delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
                 max_speed = 8.0 if c.kind == 1 else 10.0
@@ -219,14 +234,14 @@ def run_simulation(
                 c.velocity = max(0.0, min(max_speed, c.velocity + min(delta, max_accel)))
                 new_dist = c.dist + c.velocity
 
-                # rear-end prevention: keep gap >= length of car ahead
+                # rear-end prevention: keep centres at least (half_ahead + half_cur) apart
                 if bumper < math.inf and new_dist >= bumper:
                     new_dist = bumper
                     c.velocity = ahead.velocity
 
-                # handle end of edge
-                if new_dist >= stop_line and not green_here:  # stop at stop line
-                    c.dist = stop_line
+                # handle end of edge: stop when front reaches stop line
+                if new_dist + cur_len / 2 >= stop_line and not green_here:
+                    c.dist = stop_line - cur_len / 2  # centre stops so front == stop_line
                     c.velocity = 0.0
                     continue
 
@@ -241,14 +256,15 @@ def run_simulation(
 
                     # green: ask user where to turn
                     exit_dirs = tuple(map_.street_direction(s) for s in outs)
-                    first_cars = [
-                        min(
-                            (cars[i].dist for i in range(n) if cars[i].edge_id == s),
-                            default=math.inf,
-                        )
-                        for s in outs
-                    ]
-                    exit_idx = car_turn(exit_dirs, first_cars)
+
+                    # For each outbound street, find the first (minimum-dist) car
+                    # and remember its index so we can check its length and velocity.
+                    first_cars_info: list[tuple[float, int]] = []
+                    for s in outs:
+                        cands = [(cars[i].dist, i) for i in range(n) if cars[i].edge_id == s]
+                        first_cars_info.append(min(cands, default=(math.inf, -1)))
+
+                    exit_idx = car_turn(exit_dirs, [d for d, _ in first_cars_info])
 
                     car_len = map_.car_visual_length(car_idx)
 
@@ -257,22 +273,23 @@ def run_simulation(
                         c.velocity = 0.0
                         continue
 
-                    target = outs[exit_idx]
-                    first_on = min(
-                        (cars[i].dist for i in range(n) if cars[i].edge_id == target),
-                        default=math.inf,
-                    )
+                    first_on, first_on_idx = first_cars_info[exit_idx]
+                    blocker_len = map_.car_visual_length(first_on_idx) if first_on_idx != -1 else 0.0
+                    blocker_vel = cars[first_on_idx].velocity if first_on_idx != -1 else 0.0
 
-                    if first_on >= car_len:  # space available: turn
+                    # Entering car centre starts near 0; blocker rear is at first_on - blocker_len/2.
+                    # Require first_on - blocker_len/2 >= cur_len/2 (no overlap).
+                    if first_on >= blocker_len / 2 + cur_len / 2:  # space available: turn
+                        target = outs[exit_idx]
                         cur_dir = map_.street_direction(street_id)
                         dot = cur_dir[0] * exit_dirs[exit_idx][0] + cur_dir[1] * exit_dirs[exit_idx][1]
                         _angle = math.acos(max(-1.0, min(1.0, dot)))
                         c.velocity = c.velocity * max(0.1, 1.0 - _angle / math.pi)
                         c.edge_id = target
                         c.dist = max(0.0, new_dist - street_length)
-                    else:  # target blocked: hold
-                        c.dist = street_length - car_len
-                        c.velocity = 0.0
+                    else:  # target blocked: hold at entry point, match blocker speed
+                        c.dist = street_length
+                        c.velocity = blocker_vel
                 else:
                     c.dist = new_dist
 

@@ -53,6 +53,9 @@ class Map:
     # Viewport width in world units.  Height is always width * 9/16.
     # When 0 the widget falls back to auto-fitting from node bounds.
     width:        float            = 0.0
+    # Relative spawn weights keyed by street_id.  Missing entries default to 1.
+    # A source with weight 2 receives twice as many initial cars as one with weight 1.
+    source_weights: dict[int, float] = field(default_factory=dict)
 
     @property
     def height(self) -> float:
