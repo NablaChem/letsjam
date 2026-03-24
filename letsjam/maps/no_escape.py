@@ -42,4 +42,4 @@ class NoEscape(LevelMap):
                 (-10, 400),
             ]
         )
-        self.add_cars(4, 1)
+        self.add_cars(4, 0)
