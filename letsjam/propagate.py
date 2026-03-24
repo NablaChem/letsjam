@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from collections.abc import Callable
@@ -32,6 +32,41 @@ def _build_graph(map_: LevelMap) -> tuple[dict[int, list[int]], dict[int, list[i
         outbound[from_node].append(street_id)
         inbound[to_node].append(street_id)
     return inbound, outbound
+
+
+def _topo_street_order(
+    n_nodes: int,
+    streets: list[tuple[int, int]],
+    inbound: dict[int, list[int]],
+    outbound: dict[int, list[int]],
+) -> list[int]:
+    """Return street IDs ordered so downstream streets come first.
+
+    Reverse BFS from sink nodes (out-degree 0), walking backwards via inbound
+    edges.  Each node gets a rank equal to its BFS discovery order; streets are
+    then sorted ascending by their destination node's rank.
+
+    Nodes that are part of cycles are never dequeued and receive ranks after all
+    DAG-reachable nodes, in arbitrary order.  Streets inside a pure cycle are
+    therefore processed in an unspecified-but-consistent order; the downstream-
+    first guarantee holds only for the acyclic portion of the graph.
+    """
+    out_deg = [len(outbound[i]) for i in range(n_nodes)]
+    queue: deque[int] = deque(i for i in range(n_nodes) if out_deg[i] == 0)
+    node_rank: dict[int, int] = {}
+    while queue:
+        node = queue.popleft()
+        node_rank[node] = len(node_rank)
+        for s in inbound[node]:
+            pred = streets[s][0]
+            out_deg[pred] -= 1
+            if out_deg[pred] == 0:
+                queue.append(pred)
+    # cycle nodes: append in index order
+    for node in range(n_nodes):
+        if node not in node_rank:
+            node_rank[node] = len(node_rank)
+    return sorted(range(len(streets)), key=lambda s: node_rank[streets[s][1]])
 
 
 def _place_cars(map_: LevelMap, inbound: dict[int, list[int]]) -> list[Car]:
@@ -135,10 +170,11 @@ def run_simulation(
 ) -> Trajectory:
     """Run a full simulation and return the trajectory."""
     inbound, outbound = _build_graph(map_)
+    n_nodes = len(map_.nodes)
+    street_order = _topo_street_order(n_nodes, map_.streets, inbound, outbound)
     random.seed(map_.seed)
     cars = _place_cars(map_, inbound)
     n = map_.n_cars
-    n_nodes = len(map_.nodes)
 
     light_green = [
         -1
@@ -192,18 +228,16 @@ def run_simulation(
                 light_last_switch[node] = float(frame)
 
         # ── Phase 2: move cars ────────────────────────────────────────────
-        # Build per-street car lists; updated mid-phase when cars transition edges.
         cars_by_street: dict[int, list[int]] = defaultdict(list)
         for i, c in enumerate(cars):
             if c.edge_id != DISABLED:
                 cars_by_street[c.edge_id].append(i)
 
-        transitioned: set[int] = (
-            set()
-        )  # cars that already moved to a new edge this frame
+        transitioned: set[int] = set()
 
-        for street_id in list(cars_by_street):
-            # Re-read each iteration so mid-phase arrivals are included.
+        for street_id in street_order:
+            if street_id not in cars_by_street:
+                continue
             car_indices = cars_by_street[street_id]
             # process front-to-back (descending dist)
             car_indices.sort(key=lambda i: cars[i].dist, reverse=True)
@@ -297,19 +331,13 @@ def run_simulation(
 
                     first_on, first_on_idx = first_cars_info[exit_idx]
                     blocker_len = (
-                        map_.car_visual_length(first_on_idx)
-                        if first_on_idx != -1
-                        else 0.0
+                        map_.car_visual_length(first_on_idx) if first_on_idx != -1 else 0.0
                     )
-                    blocker_vel = (
-                        cars[first_on_idx].velocity if first_on_idx != -1 else 0.0
-                    )
+                    blocker_vel = cars[first_on_idx].velocity if first_on_idx != -1 else 0.0
 
-                    # Require blocker rear (predicted after it moves) >= entering car front.
                     entry_dist = max(0.0, new_dist - street_length)
-                    if (
-                        first_on + blocker_vel - blocker_len / 2 >= entry_dist + cur_len / 2
-                    ):  # space available: turn
+                    safe_entry = first_on - blocker_len / 2 - cur_len / 2
+                    if safe_entry >= 0:  # blocker has cleared the entry point: cross
                         target = outs[exit_idx]
                         cur_dir = map_.street_direction(street_id)
                         dot = (
@@ -318,11 +346,14 @@ def run_simulation(
                         )
                         _angle = math.acos(max(-1.0, min(1.0, dot)))
                         c.velocity = c.velocity * max(0.1, 1.0 - _angle / math.pi)
+                        if entry_dist > safe_entry:  # would overlap: clamp like rear-end
+                            c.dist = safe_entry
+                            c.velocity = min(c.velocity, blocker_vel)
+                        else:
+                            c.dist = entry_dist
                         c.edge_id = target
-                        c.dist = entry_dist
                         transitioned.add(car_idx)
-                        cars_by_street[target].append(car_idx)
-                    else:  # target blocked: hold front flush with street end, match blocker speed
+                    else:  # blocker still at entry: hold at end of source street
                         c.dist = street_length - cur_len / 2
                         c.velocity = blocker_vel
                 else:
