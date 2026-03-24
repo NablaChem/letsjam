@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from collections.abc import Callable
 
-from .graph import Map
+from .maps.base import LevelMap
 from .simulation import Trajectory, DISABLED
 
 STOP_DISTANCE = 8
@@ -22,7 +22,7 @@ class Car:
     dist: float
 
 
-def _build_graph(map_: Map) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
+def _build_graph(map_: LevelMap) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
     """Return (inbound, outbound) edge index keyed by node id."""
     n_nodes = len(map_.nodes)
     inbound: dict[int, list[int]] = {i: [] for i in range(n_nodes)}
@@ -33,7 +33,7 @@ def _build_graph(map_: Map) -> tuple[dict[int, list[int]], dict[int, list[int]]]
     return inbound, outbound
 
 
-def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
+def _place_cars(map_: LevelMap, inbound: dict[int, list[int]]) -> list[Car]:
     """Place cars on source streets, guaranteeing valid non-overlapping positions.
 
     Cars are distributed round-robin across all source streets.  For each
@@ -126,7 +126,7 @@ def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
 
 
 def run_simulation(
-    map_: Map,
+    map_: LevelMap,
     n_frames: int,
     car_drive: Callable,
     car_turn: Callable,
@@ -134,6 +134,7 @@ def run_simulation(
 ) -> Trajectory:
     """Run a full simulation and return the trajectory."""
     inbound, outbound = _build_graph(map_)
+    random.seed(map_.seed)
     cars = _place_cars(map_, inbound)
     n = map_.n_cars
     n_nodes = len(map_.nodes)

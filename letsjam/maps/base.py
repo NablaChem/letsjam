@@ -1,23 +1,13 @@
 """
 Map data structures for letsjam.
 
-A Map contains:
+A LevelMap contains:
   - nodes:       list of (x, y) crossing centres
   - streets:     list of (from_node_idx, to_node_idx) directed edges;
                  street_id = index in this list
   - decorations: optional visual elements (parks, rivers)
   - car_types:   per-car type array (0 = car, 1 = truck)
   - car_length / truck_length: world-unit lengths used for rendering
-
-Example
--------
->>> m = Map(
-...     nodes=[(0, 0), (100, 0), (100, 100)],
-...     streets=[(0, 1), (1, 2), (2, 0)],
-... )
->>> m.add_cars(n_cars=5, n_trucks=2)
->>> m.street_length(0)
-100.0
 """
 
 from __future__ import annotations
@@ -42,20 +32,43 @@ class Decoration:
         return d
 
 
-@dataclass
-class Map:
-    nodes:        list[tuple[float, float]]
-    streets:      list[tuple[int, int]]
-    decorations:  list[Decoration] = field(default_factory=list)
-    car_types:    list[int]        = field(default_factory=list)  # 0=car 1=truck
-    car_length:   float            = 4.0
-    truck_length: float            = 8.0
-    # Viewport width in world units.  Height is always width * 9/16.
-    # When 0 the widget falls back to auto-fitting from node bounds.
-    width:        float            = 0.0
-    # Relative spawn weights keyed by street_id.  Missing entries default to 1.
-    # A source with weight 2 receives twice as many initial cars as one with weight 1.
-    source_weights: dict[int, float] = field(default_factory=dict)
+class LevelMap:
+    """Base class for all letsjam levels.
+
+    Subclasses set up nodes/streets in __init__, call super().__init__(),
+    then add decorations and vehicles.
+
+    Example subclass::
+
+        class MyLevel(LevelMap):
+            def __init__(self) -> None:
+                nodes = [(0, 0), (200, 0)]
+                streets = [(0, 1)]
+                super().__init__(nodes=nodes, streets=streets, width=200, seed=1)
+                self.add_cars(n_cars=3)
+    """
+
+    def __init__(
+        self,
+        nodes: list[tuple[float, float]],
+        streets: list[tuple[int, int]],
+        width: float = 0.0,
+        seed: int = 0,
+        decorations: list[Decoration] | None = None,
+        car_types: list[int] | None = None,
+        car_length: float = 4.0,
+        truck_length: float = 8.0,
+        source_weights: dict[int, float] | None = None,
+    ) -> None:
+        self.nodes = list(nodes)
+        self.streets = list(streets)
+        self.width = width
+        self.seed = seed
+        self.decorations: list[Decoration] = decorations if decorations is not None else []
+        self.car_types: list[int] = car_types if car_types is not None else []
+        self.car_length = car_length
+        self.truck_length = truck_length
+        self.source_weights: dict[int, float] = source_weights if source_weights is not None else {}
 
     @property
     def height(self) -> float:

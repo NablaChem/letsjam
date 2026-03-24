@@ -29,7 +29,7 @@ import pathlib
 import anywidget
 import traitlets
 
-from .graph import Map
+from .maps.base import LevelMap
 from .simulation import Trajectory
 
 _static = pathlib.Path(__file__).parent / "static"
@@ -89,7 +89,7 @@ class TrafficWidget(anywidget.AnyWidget):
     @classmethod
     def from_simulation(
         cls,
-        map_: Map,
+        map_: LevelMap,
         traj: Trajectory,
     ) -> "TrafficWidget":
         """

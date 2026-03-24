@@ -3,36 +3,24 @@ letsjam – traffic simulation visualiser for Jupyter notebooks.
 
 Quick start
 -----------
->>> from letsjam import Map, Trajectory, TrafficWidget
+>>> from letsjam.maps import SmallTown
+>>> from letsjam.propagate import run_simulation
+>>> from letsjam import TrafficWidget
 >>>
->>> # 1. define the map
->>> m = Map(
-...     nodes=[(0, 0), (200, 0), (200, 200), (0, 200)],
-...     streets=[(0, 1), (1, 2), (2, 3), (3, 0)],
-... )
->>> m.add_cars(n_cars=4, n_trucks=1)
+>>> m = SmallTown()
 >>>
->>> # 2. build a trajectory
->>> traj = Trajectory(m)
->>> for step in range(100):
-...     traj.append([
-...         (i % 4, (step * 2.0 + i * 50) % m.street_length(i % 4))
-...         for i in range(m.n_cars)
-...     ])
->>>
->>> # 3. display
+>>> traj = run_simulation(m, n_frames=240, car_drive=..., car_turn=..., traffic_light=...)
 >>> TrafficWidget.from_simulation(m, traj)
 """
 
-from .graph import Decoration, Map
-from .maps import ChallengeMap, Highway
+from .maps.base import Decoration, LevelMap
+from .maps import Highway
 from .simulation import DISABLED, Trajectory, unpack_trajectory
 from .widget import TrafficWidget
 
 __all__ = [
-    "Map",
+    "LevelMap",
     "Decoration",
-    "ChallengeMap",
     "Highway",
     "Trajectory",
     "TrafficWidget",

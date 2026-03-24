@@ -31,7 +31,7 @@ import struct
 
 import numpy as np
 
-from .graph import Map
+from .maps.base import LevelMap
 
 
 # dtype for one (edge_id, dist) cell — naturally aligned, 8 bytes
@@ -51,7 +51,7 @@ class Trajectory:
         The Map this trajectory belongs to.  Used for n_cars validation.
     """
 
-    def __init__(self, map_: Map) -> None:
+    def __init__(self, map_: LevelMap) -> None:
         self._map = map_
         self._frames: list[np.ndarray] = []   # each entry: 1D array of _CELL_DTYPE, shape (n_cars,)
         self._light_frames: list[list[int]] = []  # per frame: light_green index per node
