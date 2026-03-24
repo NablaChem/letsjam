@@ -59,10 +59,12 @@ def _place_cars(map_: Map, inbound: dict[int, list[int]]) -> list[Car]:
     if not source_streets:
         return cars
 
-    # Round-robin assignment: car i → source_streets[i % n_sources]
+    # Round-robin assignment: shuffle first so types are interleaved
+    indices = list(range(map_.n_cars))
+    random.shuffle(indices)
     assigned: dict[int, list[int]] = {s: [] for s in source_streets}
-    for i in range(map_.n_cars):
-        assigned[source_streets[i % len(source_streets)]].append(i)
+    for i, car_idx in enumerate(indices):
+        assigned[source_streets[i % len(source_streets)]].append(car_idx)
 
     for street_id, car_indices in assigned.items():
         if not car_indices:
@@ -212,7 +214,9 @@ def run_simulation(
                 dist_to_light = math.inf if green_here else max(0.0, stop_line - c.dist)
 
                 delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
-                c.velocity = max(0.0, min(10.0, c.velocity + min(delta, 1)))
+                max_speed = 8.0 if c.kind == 1 else 10.0
+                max_accel = 0.5 if c.kind == 1 else 1.0
+                c.velocity = max(0.0, min(max_speed, c.velocity + min(delta, max_accel)))
                 new_dist = c.dist + c.velocity
 
                 # rear-end prevention: keep gap >= length of car ahead

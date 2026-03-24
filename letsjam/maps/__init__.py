@@ -113,7 +113,7 @@ class BabySteps(ChallengeMap):
         n_src = len(nodes)
         nodes.append((-10.0, 50))
         n_left = len(nodes)
-        nodes.append((w * 0.7, 50))
+        nodes.append((w * 0.3, 50))
         n_right = len(nodes)
         nodes.append((w * 0.3, -50))
         n_sink = len(nodes)
