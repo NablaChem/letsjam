@@ -71,6 +71,7 @@ function lerpAngle(a, b, t) {
 const COLORS = {
   background: 0x1a1a2e,
   street: 0x374151,
+  slowStreet: 0x5c2323,
   streetLine: 0x4b5563,
   crossing: 0x4b5563,
   crossingRim: 0x6b7280,
@@ -296,7 +297,8 @@ function bufferPolyline(pts, halfWidth) {
 // ---------------------------------------------------------------------------
 
 function placeHouses(mapData) {
-  const { nodes, streets, decorations, car_length } = mapData;
+  const { nodes, streets, decorations, car_length, no_houses_streets } = mapData;
+  const noHousesSet = new Set(no_houses_streets || []);
   const SW = car_length * 1.5;                 // street width
 
   const HW_MIN = car_length * 0.6,  HW_MAX = car_length * 1.3;   // house length range
@@ -342,7 +344,9 @@ function placeHouses(mapData) {
   const houses = [];
   const margin = car_length * 1.5;  // keep clear of intersections
 
-  for (const [fi, ti] of streets) {
+  for (let si = 0; si < streets.length; si++) {
+    if (noHousesSet.has(si)) continue;
+    const [fi, ti] = streets[si];
     const [fx, fy] = nodes[fi];
     const [tx, ty] = nodes[ti];
     const sdx = tx - fx, sdy = ty - fy;
@@ -570,11 +574,13 @@ function buildStaticScene(parent, mapData) {
   }
 
   // Actual streets on top of clearing layer
+  const slowStreetSet = new Set(mapData.slow_streets || []);
   for (let i = 0; i < streets.length; i++) {
     const [fi, ti] = streets[i];
     const [fx, fy] = nodes[fi];
     const [tx, ty] = nodes[ti];
-    g.lineStyle(STREET_WIDTH, COLORS.street, 1, 0.5);
+    const streetColor = slowStreetSet.has(i) ? COLORS.slowStreet : COLORS.street;
+    g.lineStyle(STREET_WIDTH, streetColor, 1, 0.5);
     g.moveTo(fx, fy);
     g.lineTo(tx, ty);
     drawDashedCenterLine(g, fx, fy, tx, ty, mapData.car_length);

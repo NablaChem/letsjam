@@ -182,6 +182,7 @@ def run_simulation(
     light_last_switch = [0.0] * n_nodes  # frame of last switch
 
     traj = Trajectory(map_)
+    blocked_at_crossing: set[int] = set()  # cars waiting at crossing for a valid turn
 
     for frame in range(n_frames):
 
@@ -278,6 +279,8 @@ def run_simulation(
 
                 delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
                 max_speed = 8.0 if c.kind == 1 else 10.0
+                if c.edge_id in map_.slow_streets:
+                    max_speed = min(max_speed, 4.0)
                 max_accel = 0.5 if c.kind == 1 else 1.0
                 c.velocity = max(
                     0.0, min(max_speed, c.velocity + min(delta, max_accel))
@@ -290,17 +293,19 @@ def run_simulation(
                     c.velocity = ahead.velocity
 
                 # handle end of edge: stop when front reaches stop line
-                if new_dist + cur_len / 2 >= stop_line and not green_here:
+                # (skip for cars already committed to the crossing)
+                if new_dist + cur_len / 2 >= stop_line and not green_here and car_idx not in blocked_at_crossing:
                     c.dist = max(
                         0.0, stop_line - cur_len / 2
                     )  # centre stops so front == stop_line
                     c.velocity = 0.0
                     continue
 
-                if new_dist >= street_length:
+                if new_dist >= street_length or car_idx in blocked_at_crossing:
                     outs = outbound[dest_node]
 
                     if not outs:  # sink node: despawn
+                        blocked_at_crossing.discard(car_idx)
                         c.edge_id = DISABLED
                         c.dist = 0.0
                         c.velocity = 0.0
@@ -324,8 +329,9 @@ def run_simulation(
 
                     car_len = map_.car_visual_length(car_idx)
 
-                    if not (0 <= exit_idx < len(outs)):  # invalid answer: block
-                        c.dist = street_length - car_len
+                    if not (0 <= exit_idx < len(outs)):  # invalid answer: block at crossing
+                        blocked_at_crossing.add(car_idx)
+                        c.dist = street_length - cur_len / 2  # front at crossing
                         c.velocity = 0.0
                         continue
 
@@ -338,6 +344,7 @@ def run_simulation(
                     entry_dist = max(0.0, new_dist - street_length)
                     safe_entry = first_on - blocker_len / 2 - cur_len / 2
                     if safe_entry >= 0:  # blocker has cleared the entry point: cross
+                        blocked_at_crossing.discard(car_idx)
                         target = outs[exit_idx]
                         cur_dir = map_.street_direction(street_id)
                         dot = (

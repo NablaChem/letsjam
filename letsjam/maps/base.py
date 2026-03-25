@@ -51,7 +51,7 @@ class LevelMap:
     def __init__(
         self,
         nodes: list[tuple[float, float]],
-        streets: list[tuple[int, int]],
+        streets: list[tuple[int, int] | tuple[int, int, bool]],
         width: float = 0.0,
         seed: int = 0,
         decorations: list[Decoration] | None = None,
@@ -61,7 +61,13 @@ class LevelMap:
         source_weights: dict[int, float] | None = None,
     ) -> None:
         self.nodes = list(nodes)
-        self.streets = list(streets)
+        self.no_houses_streets: set[int] = set()
+        normalized = []
+        for i, s in enumerate(streets):
+            if len(s) == 3 and s[2]:  # type: ignore[misc]
+                self.no_houses_streets.add(i)
+            normalized.append((s[0], s[1]))
+        self.streets = normalized
         self.width = width
         self.seed = seed
         self.decorations: list[Decoration] = decorations if decorations is not None else []
@@ -69,6 +75,7 @@ class LevelMap:
         self.car_length = car_length
         self.truck_length = truck_length
         self.source_weights: dict[int, float] = source_weights if source_weights is not None else {}
+        self.slow_streets: set[int] = set()
 
     @property
     def height(self) -> float:
@@ -130,6 +137,10 @@ class LevelMap:
             Decoration(type="park", points=[[x, y] for x, y in polygon])
         )
 
+    def add_slow_street(self, street_id: int) -> None:
+        """Mark a street as slow (max speed 4.0 for all vehicles)."""
+        self.slow_streets.add(street_id)
+
     def add_river(
         self, polyline: list[tuple[float, float]], width: float = 8.0
     ) -> None:
@@ -151,4 +162,6 @@ class LevelMap:
             "car_length":   self.car_length,
             "truck_length": self.truck_length,
             "width":        self.width,
+            "slow_streets":     sorted(self.slow_streets),
+            "no_houses_streets": sorted(self.no_houses_streets),
         }
