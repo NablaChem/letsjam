@@ -391,7 +391,7 @@ def run_simulation(
 
                     if not (0 <= exit_idx < len(outs)):  # invalid answer: block at crossing
                         blocked_at_crossing.add(car_idx)
-                        c.dist = street_length - cur_len / 2  # front at crossing
+                        c.dist = max(c.dist, street_length - cur_len / 2)  # front at crossing
                         c.velocity = 0.0
                         continue
 
@@ -422,7 +422,7 @@ def run_simulation(
                         transitioned.add(car_idx)
                         cars_by_street[target].append(car_idx)
                     else:  # blocker still at entry: hold at end of source street
-                        c.dist = street_length - cur_len / 2
+                        c.dist = max(c.dist, street_length - cur_len / 2)
                         c.velocity = blocker_vel
                 else:
                     c.dist = new_dist
