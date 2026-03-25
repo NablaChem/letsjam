@@ -336,15 +336,17 @@ def run_simulation(
                     c.velocity = ahead.velocity
 
                 # handle end of edge: stop when front reaches stop line
-                # (skip for cars already committed to the crossing)
-                if new_dist + cur_len / 2 >= stop_line and not green_here and car_idx not in blocked_at_crossing:
+                # only if the front was still behind the line this frame (committed cars continue)
+                if (new_dist + cur_len / 2 >= stop_line
+                        and c.dist + cur_len / 2 < stop_line
+                        and not green_here):
                     c.dist = max(
                         0.0, stop_line - cur_len / 2
                     )  # centre stops so front == stop_line
                     c.velocity = 0.0
                     continue
 
-                if new_dist >= street_length or car_idx in blocked_at_crossing:
+                if new_dist >= street_length or (car_idx in blocked_at_crossing and green_here):
                     outs = outbound[dest_node]
 
                     if not outs:  # sink node: despawn
@@ -371,7 +373,7 @@ def run_simulation(
                         cands = [
                             (cars[i].dist, i)
                             for i in cars_by_street[s]
-                            if i not in transitioned
+                            if i not in transitioned or cars[i].edge_id == s
                         ]
                         first_cars_info.append(min(cands, default=(math.inf, -1)))
 
@@ -418,6 +420,7 @@ def run_simulation(
                             c.dist = entry_dist
                         c.edge_id = target
                         transitioned.add(car_idx)
+                        cars_by_street[target].append(car_idx)
                     else:  # blocker still at entry: hold at end of source street
                         c.dist = street_length - cur_len / 2
                         c.velocity = blocker_vel

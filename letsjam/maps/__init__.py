@@ -24,6 +24,7 @@ Usage
 
 from .base import LevelMap, Decoration
 from .baby_steps import BabySteps
+from .capacity import Capacity
 from .detour import Detour
 from .highway import Highway
 from .main_street import MainStreet
@@ -34,6 +35,7 @@ __all__ = [
     "LevelMap",
     "Decoration",
     "BabySteps",
+    "Capacity",
     "Detour",
     "Highway",
     "MainStreet",
