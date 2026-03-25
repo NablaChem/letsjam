@@ -291,7 +291,7 @@ def run_simulation(
             stop_line = max(0.0, street_length - STOP_DISTANCE)
             ins = inbound[dest_node]
             inbound_idx = ins.index(street_id)
-            green_here = light_green[dest_node] == inbound_idx
+            green_here = light_green[dest_node] == inbound_idx or not outbound[dest_node]
 
             for rank, car_idx in enumerate(car_indices):
                 if car_idx in transitioned:
@@ -338,7 +338,7 @@ def run_simulation(
                 # handle end of edge: stop when front reaches stop line
                 # only if the front was still behind the line this frame (committed cars continue)
                 if (new_dist + cur_len / 2 >= stop_line
-                        and c.dist + cur_len / 2 < stop_line
+                        and c.dist + cur_len / 2 <= stop_line
                         and not green_here):
                     c.dist = max(
                         0.0, stop_line - cur_len / 2
