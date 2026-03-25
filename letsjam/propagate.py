@@ -267,7 +267,7 @@ def run_simulation(
             if not (0 <= new_green < len(ins)):  # invalid: all red
                 new_green = -1
 
-            if new_green != light_green[node]:
+            if new_green != light_green[node] or frame == 0:
                 light_green[node] = new_green
                 light_last_switch[node] = float(frame)
 

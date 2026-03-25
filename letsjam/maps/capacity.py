@@ -39,9 +39,9 @@ class Capacity(LevelMap):
         x_se_bend = w * 0.56  # ~179
         x_sink = w + 10.0  # 330
 
-        y_north = h * 0.28  # ~50  – north source
+        y_north = 0.0  # north source – aligned with east exit (y_mid)
         y_mid = 0.0  # horizontal centreline
-        y_south = -h * 0.16  # ~-29 – south source (closer to centre)
+        y_south = h * 0.36  # ~-65 – south source – aligned with SE exit
         y_se = -h * 0.36  # ~-65 – south-east path
 
         nodes: list[tuple[float, float]] = []

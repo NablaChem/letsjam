@@ -139,6 +139,7 @@ def traffic_light(
                          simple time-based strategies, e.g. switch every 30
                          frames: return (frame // 30) % len(inbound).
     """
+    print(last_switch)
     return 7
 
 
