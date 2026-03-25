@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import math
 import random
 from collections import defaultdict, deque
@@ -67,6 +68,47 @@ def _topo_street_order(
         if node not in node_rank:
             node_rank[node] = len(node_rank)
     return sorted(range(len(streets)), key=lambda s: node_rank[streets[s][1]])
+
+
+def _street_angle(direction: tuple[float, float]) -> float:
+    """Convert a unit direction vector to a compass bearing in degrees.
+
+    0 = North (up), 90 = East (right), 180 = South (down), 270 = West (left).
+    Assumes y increases downward (standard screen coordinates).
+    """
+    dx, dy = direction
+    return math.degrees(math.atan2(dx, -dy)) % 360
+
+
+def _compute_sink_distances(
+    map_: LevelMap,
+    inbound: dict[int, list[int]],
+    outbound: dict[int, list[int]],
+) -> list[float]:
+    """Return shortest path distance from every node to the nearest sink (exit).
+
+    Uses multi-source Dijkstra starting from all sink nodes (out-degree 0),
+    running on the reversed graph so distances flow backward to each source.
+    Nodes with no path to any sink get math.inf.
+    """
+    n_nodes = len(map_.nodes)
+    dist = [math.inf] * n_nodes
+    heap: list[tuple[float, int]] = []
+    for node in range(n_nodes):
+        if not outbound[node]:  # sink node
+            dist[node] = 0.0
+            heapq.heappush(heap, (0.0, node))
+    while heap:
+        d, node = heapq.heappop(heap)
+        if d > dist[node]:
+            continue
+        for s in inbound[node]:  # walk backwards along original edges
+            pred = map_.streets[s][0]
+            new_d = d + map_.street_length(s)
+            if new_d < dist[pred]:
+                dist[pred] = new_d
+                heapq.heappush(heap, (new_d, pred))
+    return dist
 
 
 def _place_cars(map_: LevelMap, inbound: dict[int, list[int]]) -> list[Car]:
@@ -174,6 +216,7 @@ def run_simulation(
     street_order = _topo_street_order(n_nodes, map_.streets, inbound, outbound)
     random.seed(map_.seed)
     cars = _place_cars(map_, inbound)
+    dist_to_sink = _compute_sink_distances(map_, inbound, outbound)
     n = map_.n_cars
 
     light_green = [
@@ -218,7 +261,7 @@ def run_simulation(
             ]
 
             new_green = traffic_light(
-                inbound_data, outbound_data, light_last_switch[node], light_green[node]
+                inbound_data, outbound_data, light_last_switch[node], light_green[node], frame
             )
 
             if not (0 <= new_green < len(ins)):  # invalid: all red
@@ -277,7 +320,7 @@ def run_simulation(
                     else max(0.0, stop_line - cur_len / 2 - c.dist)
                 )
 
-                delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here)
+                delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here, c.kind == 1)
                 max_speed = 8.0 if c.kind == 1 else 10.0
                 if c.edge_id in map_.slow_streets:
                     max_speed = min(max_speed, 4.0)
@@ -313,6 +356,13 @@ def run_simulation(
 
                     # green: ask user where to turn
                     exit_dirs = tuple(map_.street_direction(s) for s in outs)
+                    current_angle = _street_angle(map_.street_direction(street_id))
+                    exit_angles = [_street_angle(d) for d in exit_dirs]
+                    sink_distances = [
+                        map_.street_length(s) + dist_to_sink[map_.streets[s][1]]
+                        for s in outs
+                    ]
+                    is_slow_streets = [s in map_.slow_streets for s in outs]
 
                     # For each outbound street, find the first (minimum-dist) car
                     # and remember its index so we can check its length and velocity.
@@ -325,7 +375,15 @@ def run_simulation(
                         ]
                         first_cars_info.append(min(cands, default=(math.inf, -1)))
 
-                    exit_idx = car_turn(exit_dirs, [d for d, _ in first_cars_info])
+                    exit_idx = car_turn(
+                        exit_dirs,
+                        [d for d, _ in first_cars_info],
+                        current_angle,
+                        exit_angles,
+                        sink_distances,
+                        is_slow_streets,
+                        c.kind == 1,
+                    )
 
                     car_len = map_.car_visual_length(car_idx)
 
