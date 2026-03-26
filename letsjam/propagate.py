@@ -351,6 +351,7 @@ def run_simulation(
 
                     if not outs:  # sink node: despawn
                         blocked_at_crossing.discard(car_idx)
+                        transitioned.add(car_idx)
                         c.edge_id = DISABLED
                         c.dist = 0.0
                         c.velocity = 0.0
@@ -413,6 +414,8 @@ def run_simulation(
                         )
                         _angle = math.acos(max(-1.0, min(1.0, dot)))
                         c.velocity = c.velocity * max(0.1, 1.0 - _angle / math.pi)
+                        if green_here and first_on_idx != -1:
+                            c.velocity = max(c.velocity, blocker_vel)
                         if entry_dist > safe_entry:  # would overlap: clamp like rear-end
                             c.dist = safe_entry
                             c.velocity = min(c.velocity, blocker_vel)
