@@ -24,10 +24,12 @@ Usage
 
 from .base import LevelMap, Decoration
 from .baby_steps import BabySteps
+from .less_is_more import LessIsMore
 from .capacity import Capacity
 from .detour import Detour
 from .highway import Highway
 from .main_street import MainStreet
+from .multipass import Multipass
 from .no_escape import NoEscape
 from .small_town import SmallTown
 
@@ -35,10 +37,12 @@ __all__ = [
     "LevelMap",
     "Decoration",
     "BabySteps",
+    "LessIsMore",
     "Capacity",
     "Detour",
     "Highway",
     "MainStreet",
+    "Multipass",
     "NoEscape",
     "SmallTown",
 ]
