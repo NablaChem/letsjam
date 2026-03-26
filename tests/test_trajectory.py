@@ -212,7 +212,7 @@ class TestTrajectoryValid:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=100,
             car_drive=simple_car_drive,
@@ -232,7 +232,7 @@ class TestTrajectoryValid:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=100,
             car_drive=simple_car_drive,
@@ -251,7 +251,7 @@ class TestTrajectoryValid:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=100,
             car_drive=simple_car_drive,
@@ -276,7 +276,7 @@ class TestTrajectoryProperties:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=50,
             car_drive=simple_car_drive,
@@ -291,7 +291,7 @@ class TestTrajectoryProperties:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=50,
             car_drive=simple_car_drive,
@@ -308,7 +308,7 @@ class TestTrajectoryProperties:
         name, map_ = map_fixture
         random.seed(42)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=200,  # generous frame count
             car_drive=simple_car_drive,
@@ -334,7 +334,7 @@ class TestLongRunSimulation:
         map_ = SmallTown()
         map_.add_cars(n_cars=10, n_trucks=3)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=300,
             car_drive=simple_car_drive,
@@ -360,7 +360,7 @@ class TestHighwayCapacity:
         map_ = Highway()
         map_.add_cars(n_cars=15, n_trucks=5)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=150,
             car_drive=simple_car_drive,
@@ -381,7 +381,7 @@ class TestTrafficLights:
         map_ = MainStreet()
         map_.add_cars(n_cars=8, n_trucks=2)
 
-        traj = run_simulation(
+        traj, _ = run_simulation(
             map_,
             n_frames=200,
             car_drive=simple_car_drive,

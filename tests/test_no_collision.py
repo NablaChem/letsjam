@@ -96,7 +96,7 @@ def test_no_collision_mainstreet():
     m = MainStreet()
     m.add_cars(n_cars=5, n_trucks=2)
 
-    traj = run_simulation(
+    traj, _ = run_simulation(
         m,
         n_frames=240,
         car_drive=car_drive,
