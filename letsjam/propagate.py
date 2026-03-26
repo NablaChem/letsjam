@@ -209,8 +209,8 @@ def run_simulation(
     car_drive: Callable,
     car_turn: Callable,
     traffic_light: Callable,
-) -> Trajectory:
-    """Run a full simulation and return the trajectory."""
+) -> tuple[Trajectory, float | None]:
+    """Run a full simulation and return the trajectory and time to completion."""
     inbound, outbound = _build_graph(map_)
     n_nodes = len(map_.nodes)
     street_order = _topo_street_order(n_nodes, map_.streets, inbound, outbound)
@@ -227,6 +227,7 @@ def run_simulation(
     traj = Trajectory(map_)
     blocked_at_crossing: set[int] = set()  # cars waiting at crossing for a valid turn
 
+    time_to_completion = None
     for frame in range(n_frames):
 
         # ── Phase 1: update traffic lights ───────────────────────────────
@@ -261,7 +262,11 @@ def run_simulation(
             ]
 
             new_green = traffic_light(
-                inbound_data, outbound_data, light_last_switch[node], light_green[node], frame
+                inbound_data,
+                outbound_data,
+                light_last_switch[node],
+                light_green[node],
+                frame,
             )
 
             if not (0 <= new_green < len(ins)):  # invalid: all red
@@ -291,7 +296,9 @@ def run_simulation(
             stop_line = max(0.0, street_length - STOP_DISTANCE)
             ins = inbound[dest_node]
             inbound_idx = ins.index(street_id)
-            green_here = light_green[dest_node] == inbound_idx or not outbound[dest_node]
+            green_here = (
+                light_green[dest_node] == inbound_idx or not outbound[dest_node]
+            )
 
             for rank, car_idx in enumerate(car_indices):
                 if car_idx in transitioned:
@@ -320,7 +327,9 @@ def run_simulation(
                     else max(0.0, stop_line - cur_len / 2 - c.dist)
                 )
 
-                delta = car_drive(c.velocity, dist_to_next, dist_to_light, green_here, c.kind == 1)
+                delta = car_drive(
+                    c.velocity, dist_to_next, dist_to_light, green_here, c.kind == 1
+                )
                 max_speed = 8.0 if c.kind == 1 else 10.0
                 if c.edge_id in map_.slow_streets:
                     max_speed = min(max_speed, 4.0)
@@ -337,16 +346,20 @@ def run_simulation(
 
                 # handle end of edge: stop when front reaches stop line
                 # only if the front was still behind the line this frame (committed cars continue)
-                if (new_dist + cur_len / 2 >= stop_line
-                        and c.dist + cur_len / 2 <= stop_line
-                        and not green_here):
+                if (
+                    new_dist + cur_len / 2 >= stop_line
+                    and c.dist + cur_len / 2 <= stop_line
+                    and not green_here
+                ):
                     c.dist = max(
                         0.0, stop_line - cur_len / 2
                     )  # centre stops so front == stop_line
                     c.velocity = 0.0
                     continue
 
-                if new_dist >= street_length or (car_idx in blocked_at_crossing and green_here):
+                if new_dist >= street_length or (
+                    car_idx in blocked_at_crossing and green_here
+                ):
                     outs = outbound[dest_node]
 
                     if not outs:  # sink node: despawn
@@ -390,17 +403,25 @@ def run_simulation(
 
                     car_len = map_.car_visual_length(car_idx)
 
-                    if not (0 <= exit_idx < len(outs)):  # invalid answer: block at crossing
+                    if not (
+                        0 <= exit_idx < len(outs)
+                    ):  # invalid answer: block at crossing
                         blocked_at_crossing.add(car_idx)
-                        c.dist = max(c.dist, street_length - cur_len / 2)  # front at crossing
+                        c.dist = max(
+                            c.dist, street_length - cur_len / 2
+                        )  # front at crossing
                         c.velocity = 0.0
                         continue
 
                     first_on, first_on_idx = first_cars_info[exit_idx]
                     blocker_len = (
-                        map_.car_visual_length(first_on_idx) if first_on_idx != -1 else 0.0
+                        map_.car_visual_length(first_on_idx)
+                        if first_on_idx != -1
+                        else 0.0
                     )
-                    blocker_vel = cars[first_on_idx].velocity if first_on_idx != -1 else 0.0
+                    blocker_vel = (
+                        cars[first_on_idx].velocity if first_on_idx != -1 else 0.0
+                    )
 
                     entry_dist = max(0.0, new_dist - street_length)
                     safe_entry = first_on - blocker_len / 2 - cur_len / 2
@@ -416,7 +437,9 @@ def run_simulation(
                         c.velocity = c.velocity * max(0.1, 1.0 - _angle / math.pi)
                         if green_here and first_on_idx != -1:
                             c.velocity = max(c.velocity, blocker_vel)
-                        if entry_dist > safe_entry:  # would overlap: clamp like rear-end
+                        if (
+                            entry_dist > safe_entry
+                        ):  # would overlap: clamp like rear-end
                             c.dist = safe_entry
                             c.velocity = min(c.velocity, blocker_vel)
                         else:
@@ -441,9 +464,65 @@ def run_simulation(
         traj.append_lights(light_green)
 
         if all(c.edge_id == DISABLED for c in cars):
-            print(f"All cars cleared in {frame} minutes.")
+            time_to_completion = frame
             break
     else:
-        print("Did not finish")
+        time_to_completion = None
 
-    return traj
+    return traj, time_to_completion
+
+
+def run_strategy_on_all_maps(
+    n_frames: int,
+    car_drive: Callable,
+    car_turn: Callable,
+    traffic_light: Callable,
+) -> None:
+    """Run a strategy on all available maps and print a table of results.
+
+    'Time to solution' shows "did not finish" if the strategy did not complete on that map.
+    """
+    from .maps import (
+        BabySteps,
+        Capacity,
+        Detour,
+        Highway,
+        LessIsMore,
+        MainStreet,
+        Multipass,
+        NoEscape,
+        SmallTown,
+    )
+
+    maps = [
+        ("BabySteps", BabySteps()),
+        ("Capacity", Capacity()),
+        ("Detour", Detour()),
+        ("Highway", Highway()),
+        ("LessIsMore", LessIsMore()),
+        ("MainStreet", MainStreet()),
+        ("Multipass", Multipass()),
+        ("NoEscape", NoEscape()),
+        ("SmallTown", SmallTown()),
+    ]
+
+    results = []
+    for map_name, map_obj in maps:
+        _, time_to_completion = run_simulation(
+            map_obj, n_frames, car_drive, car_turn, traffic_light
+        )
+        result = {
+            "Map": map_name,
+            "Time to solution": (
+                "did not finish" if time_to_completion is None else time_to_completion
+            ),
+        }
+        results.append(result)
+
+    # Print table
+    max_name_len = max(len(r["Map"]) for r in results)
+    header = f"{'Map':<{max_name_len}}  Time to solution"
+    print(header)
+    print("-" * (max_name_len + 2 + len("Time to solution")))
+    for r in results:
+        print(f"{r['Map']:<{max_name_len}}  {r['Time to solution']}")

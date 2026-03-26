@@ -15,6 +15,7 @@ Quick start
 
 from .maps.base import Decoration, LevelMap
 from .maps import Highway
+from .propagate import run_strategy_on_all_maps
 from .simulation import DISABLED, Trajectory, unpack_trajectory
 from .widget import TrafficWidget
 
@@ -26,4 +27,5 @@ __all__ = [
     "TrafficWidget",
     "DISABLED",
     "unpack_trajectory",
+    "run_strategy_on_all_maps",
 ]
