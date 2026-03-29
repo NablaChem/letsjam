@@ -25,6 +25,7 @@ Usage
 from .base import LevelMap, Decoration
 from .baby_steps import BabySteps
 from .less_is_more import LessIsMore
+from .london import London
 from .capacity import Capacity
 from .detour import Detour
 from .highway import Highway
@@ -45,4 +46,5 @@ __all__ = [
     "Multipass",
     "NoEscape",
     "SmallTown",
+    "London",
 ]

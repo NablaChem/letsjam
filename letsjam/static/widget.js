@@ -600,6 +600,31 @@ function buildStaticScene(parent, mapData) {
     g.endFill();
   }
 
+  // Highlight source and sink nodes in bright red
+  const inbound = {};
+  const outbound = {};
+  for (let i = 0; i < nodes.length; i++) {
+    inbound[i] = [];
+    outbound[i] = [];
+  }
+  for (let i = 0; i < streets.length; i++) {
+    const [fi, ti] = streets[i];
+    outbound[fi].push(i);
+    inbound[ti].push(i);
+  }
+
+  for (let nodeIdx = 0; nodeIdx < nodes.length; nodeIdx++) {
+    const isSource = inbound[nodeIdx].length === 0;
+    const isSink = outbound[nodeIdx].length === 0;
+    if (isSource || isSink) {
+      const [x, y] = nodes[nodeIdx];
+      g.lineStyle(0);
+      g.beginFill(0xff0000, 1);  // bright red
+      g.drawCircle(x, y, CROSSING_R * 1.2);
+      g.endFill();
+    }
+  }
+
   return g;
 }
 
@@ -735,8 +760,8 @@ export async function render({ model, el }) {
   controls.appendChild(frameLabel);
 
   // --- PixiJS app ----------------------------------------------------------
-  const CANVAS_W = 960;
-  const CANVAS_H = Math.round(CANVAS_W * 9 / 16); // 540 — fixed 16:9
+  const CANVAS_W = 1440;
+  const CANVAS_H = Math.round(CANVAS_W * 9 / 16); // 810 — fixed 16:9
 
   let app;
   try {

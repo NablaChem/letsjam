@@ -492,6 +492,7 @@ def run_strategy_on_all_maps(
         Multipass,
         NoEscape,
         SmallTown,
+        London,
     )
 
     maps = [
@@ -504,6 +505,7 @@ def run_strategy_on_all_maps(
         ("Multipass", Multipass()),
         ("NoEscape", NoEscape()),
         ("SmallTown", SmallTown()),
+        ("London", London()),
     ]
 
     results = []
